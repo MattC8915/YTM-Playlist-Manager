@@ -13,13 +13,17 @@ Click on the search button in YTM
 Look at the POST request
 Copy Cookie and X-Goog-Visitor-Id to headers_auth.json
 """
-header_filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/headers_auth.json")
+auth_filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/ytm_api/headers_auth.json")
+raw_header_filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/ytm_api/raw_headers.txt")
 
 
 def getYTMClient():
     global ytmusic
     if not ytmusic:
-        ytmusic = YTMusic(header_filepath)
+        try:
+            ytmusic = YTMusic(auth_filepath)
+        except Exception as e:
+            setupYTMClient()
     return ytmusic
 
 
@@ -30,6 +34,7 @@ def setupYTMClient():
     :return:
     """
     global ytmusic
-    with open("./raw_headers.txt") as raw_headers:
+    with open(raw_header_filepath) as raw_headers:
         headers_text = raw_headers.read()
-    ytmusic = YTMusic.setup(header_filepath, headers_raw=headers_text)
+    YTMusic.setup(auth_filepath, headers_raw=headers_text)
+    ytmusic = YTMusic(auth_filepath)
