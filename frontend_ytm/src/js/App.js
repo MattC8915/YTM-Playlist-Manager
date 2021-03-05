@@ -20,7 +20,7 @@ function App() {
 
     /**
      * Fetch the list of playlists from the backend
-     * @param forceRefresh: boolean - whether or not we should force the backend to use the YTM api
+     * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
      */
   const loadPlaylists = useCallback((forceRefresh) => {
       sendRequest(`/playlist?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
