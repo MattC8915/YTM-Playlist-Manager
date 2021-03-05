@@ -86,7 +86,7 @@ export default function Playlist(props) {
         } else {
             // search for duplicates in the list of songs
             let dupes = songsInPlaylist.filter((song) => song.is_dupe)
-            setFoundDuplicate(Boolean(dupes));
+            setFoundDuplicate(dupes.length > 0);
         }
     }, [fetchSongs, fetchedSongs, songsInPlaylist, setFoundDuplicate, foundDuplicate])
 
@@ -221,17 +221,19 @@ export default function Playlist(props) {
         let toastCreated = false;
         responseToastData.forEach((data) => {
             // find the song names that are in this list
-            let songStr = selectedRows
-                .filter((song) => resp[data.key].includes(song.videoId))
-                .map((song) => song.title)
-                .join(" | ");
-            if (songStr) {
-                toastCreated = true;
-                toastContext.addToast(`The following songs ${data.toastString} ${songStr}`,
-                    // determine the color of the toast
-                    data.is_success ? SUCCESS_TOAST : ERROR_TOAST,
-                    // the toast should stay open if the failure reason is unknown
-                    data.key === "failed")
+            if (resp[data.key]) {
+                let songStr = selectedRows
+                    .filter((song) => resp[data.key].includes(song.videoId))
+                    .map((song) => song.title)
+                    .join(" | ");
+                if (songStr) {
+                    toastCreated = true;
+                    toastContext.addToast(`The following songs ${data.toastString}: ${songStr}`,
+                        // determine the color of the toast
+                        data.is_success ? SUCCESS_TOAST : ERROR_TOAST,
+                        // the toast should stay open if the failure reason is unknown
+                        data.key === "failed")
+                }
             }
         })
         if (!toastCreated) {
@@ -264,6 +266,20 @@ export default function Playlist(props) {
             .finally(() => {
                 setShowPlaylistOptions(false)
             })
+    }
+
+    /**
+     * Toggle whether to only show songs in the playlist that are duplicated
+     */
+    function filterDupes() {
+        if (!filteringByDupes) {
+            let filteredSongIds = songsInPlaylist.filter((song) => song.is_dupe).map((song) => song.videoId)
+            let filteredSongs = songsInPlaylist.filter((song) => filteredSongIds.includes(song.videoId))
+            setFilteredRows(filteredSongs);
+        } else {
+            setFilteredRows([])
+        }
+        setFilteringByDupes(!filteringByDupes)
     }
 
     // Modal containing playlists that songs can be added to
@@ -321,20 +337,6 @@ export default function Playlist(props) {
             }
         });
         setFilteredRows(Array.from(filteredSet))
-    }
-
-    /**
-     * Only show songs in the playlist that are duplicated
-     */
-    function filterDupes() {
-        if (!filteringByDupes) {
-            let filteredSongIds = songsInPlaylist.filter((song) => song.is_dupe).map((song) => song.videoId)
-            let filteredSongs = songsInPlaylist.filter((song) => filteredSongIds.includes(song.videoId))
-            setFilteredRows(filteredSongs);
-        } else {
-            setFilteredRows([])
-        }
-        setFilteringByDupes(!filteringByDupes)
     }
 
     return (
