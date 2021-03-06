@@ -215,7 +215,7 @@ export default function Playlist(props) {
                 key: "already_there",
                 toastString: "are already in the playlist",
                 is_success: false
-            },
+            }, 
             {
                 key: "failed",
                 toastString: "failed for an unknown reason",
