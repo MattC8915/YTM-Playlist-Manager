@@ -1,11 +1,6 @@
 """Contains code that interacts with the Youtube Music API"""
-
-from flask_app.db.db_service import shouldUseCache, updateCache, executeSQL, DataType
-from flask_app.db.ytm_db_service import getPlaylistSongsFromDb, persistPlaylistSongs, getPlaylistsFromDb, \
-    persistAllPlaylists
-from flask_app.ytm_api.ytm_client import getYTMClient, setupYTMClient
-
-ALL_PLAYLISTS_DATA_TYPE = "ALL_PLAYLISTS"
+from flask_app.db.ytm_db_service import getPlaylistSongsFromDb
+from flask_app.ytm_api.ytm_client import getYTMClient
 
 
 def isSuccessFromYTM(resp):
@@ -25,7 +20,7 @@ def isAlreadyInPlaylistResp(resp):
     """
     # dive deep into the response object to look for the failure reason
     runs = next((action for action in resp.get("actions") if "addToToastAction" in action), {}) \
-        .get("addToToastAction", {}).get("item", {}).get("notificationActionRenderer", {}).get("responseText", {})\
+        .get("addToToastAction", {}).get("item", {}).get("notificationActionRenderer", {}).get("responseText", {}) \
         .get("runs", [])
     text = next((run for run in runs if "text" in run), {}).get("text", None)
     return text == "This song is already in the playlist"
@@ -105,35 +100,11 @@ def removeSongsFromPlaylist(playlist_id, song_ids):
     return resp
 
 
-def getAllPlaylists(ignore_cache=False):
-    """
-    Get all of my playlists from YTM or from the db
-    :param ignore_cache:
-    :return:
-    """
-    if not ignore_cache and shouldUseCache("", ALL_PLAYLISTS_DATA_TYPE):
-        # get data from db
-        resp = getPlaylistsFromDb(convert_to_json=True)
-    else:
-        # get data from YTM
-        try:
-            resp = getYTMClient().get_library_playlists(limit=100)
-            persistAllPlaylists(resp)
-            updateCache("", ALL_PLAYLISTS_DATA_TYPE)
-        except Exception as e:
-            if "403" in str(e) or "has no attribute" in str(e):
-                setupYTMClient()
-                resp = getYTMClient().get_library_playlists(limit=100)
-            else:
-                raise e
-    return resp
-
-
 def findDuplicatesAndAddFlag(tracks):
     """
     Find duplicate songs in the list of json song objects.
     A boolean value 'is_dupe' is added to the json object if it is a duplicate.
-    :param tracks:
+    :param tracks: list of JSON objects representing songs
     :return:
     """
     id_set = set()
@@ -146,32 +117,3 @@ def findDuplicatesAndAddFlag(tracks):
             next_track["is_dupe"] = True
         id_set.add(vid_id)
     return duplicate_list
-
-
-def getPlaylist(playlist_id, ignore_cache=False):
-    """
-    Get all of the songs in a playlist from YTM or the db
-    :param playlist_id:
-    :param ignore_cache:
-    :return:
-    """
-    if ignore_cache:
-        delete = "DELETE FROM songs_in_playlist " \
-                 "WHERE playlist_id = %s"
-        data = playlist_id,
-        executeSQL(delete, data)
-
-    if not ignore_cache and shouldUseCache(playlist_id, DataType.PLAYLIST):
-        # get songs from db
-        tracks = getPlaylistSongsFromDb(playlist_id, convert_to_json=True)
-        resp = {"tracks": tracks}
-    else:
-        # get songs from YTM
-        resp = getYTMClient().get_playlist(playlist_id, limit=10000)
-        # persist them
-        persistPlaylistSongs(playlist_id, resp["tracks"])
-        updateCache(playlist_id, DataType.PLAYLIST)
-
-    # look for duplicates, so they can be highlighted on the frontend
-    findDuplicatesAndAddFlag(resp["tracks"])
-    return resp

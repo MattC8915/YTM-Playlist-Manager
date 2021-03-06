@@ -155,16 +155,32 @@ def persistAllPlaylists(playlist_list):
         executeSQL(insert, data)
 
 
-def getPlaylistsFromDb(convert_to_json=False):
+def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     """
     Get all playlist metadata from the db
+    :param playlist_id:
     :param convert_to_json:
     :return:
     """
-    select = "SELECT id, name, thumbnail_url, thumbnail_filepath from playlist order by name asc"
-    result = executeSQLFetchAll(select, None)
+    data = None
+    select = "SELECT id, name, thumbnail_url, thumbnail_filepath " \
+             "from playlist "
+    if playlist_id:
+        # only get data for a specific playlist
+        select += " WHERE id = %s"
+        data = playlist_id,
+
+    select += " order by name"
+    result = executeSQLFetchAll(select, data)
+
+    # create Playlist objects from db tuples
     playlist_objs = [Playlist.from_db(r) for r in result]
-    return [playlist.to_json() for playlist in playlist_objs] if convert_to_json else playlist_objs
+
+    if convert_to_json:
+        playlist_objs = [playlist.to_json() for playlist in playlist_objs]
+
+    # return a single Playlist if playlist_id was given, otherwise return the full list
+    return playlist_objs[0] if playlist_id else playlist_objs
 
 
 def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):

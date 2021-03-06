@@ -42,9 +42,13 @@ create table if not exists songs_in_playlist(
     primary key (playlist_id, song_id, set_video_id)
 );
 
+create type data_type as enum ('playlist', 'song', 'album', 'artist', 'thumbnail', 'library');
+
 create table if not exists data_cache(
-    data_id varchar unique,
-    timestamp integer
+    data_id varchar,
+    data_type data_type,
+    timestamp integer,
+    constraint unique_id_and_type unique (data_id, data_type)
 );
 
 create table if not exists playlist_song_duplicates(

@@ -3,9 +3,9 @@ import json
 
 from flask import Flask, request
 
-from flask_app.db.ytm_db_service import deleteSongsFromPlaylistInDb
-from flask_app.ytm_api.ytm_service import getAllPlaylists, getPlaylist, removeSongsFromPlaylist, addSongsToPlaylist, \
-    isSuccessFromYTM
+from cache.cache_service import getPlaylist, getAllPlaylists
+from db.ytm_db_service import deleteSongsFromPlaylistInDb
+from ytm_api.ytm_service import addSongsToPlaylist, removeSongsFromPlaylist, isSuccessFromYTM
 
 app = Flask(__name__)
 
@@ -76,7 +76,7 @@ def removeSongsFromPlaylistEndpoint():
     return errorResponse("error")
 
 
-@app.route("/songs/<playlist_id>", methods=["GET"])
+@app.route("/playlist/<playlist_id>", methods=["GET"])
 def getPlaylistEndpoint(playlist_id):
     """
     This endpoint returns all the songs that are in a given playlist
@@ -88,7 +88,7 @@ def getPlaylistEndpoint(playlist_id):
     return httpResponse(result)
 
 
-@app.route('/playlist', methods=["GET"])
+@app.route('/playlists', methods=["GET"])
 def getAllPlaylistsEndpoint():
     """
     This endpoint returns a list of all my playlists

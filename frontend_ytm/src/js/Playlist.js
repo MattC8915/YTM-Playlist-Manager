@@ -5,18 +5,24 @@
  * Shows warning when duplicate songs are found in the playlist.
  */
 import React from 'react';
-import {useCallback, useEffect, useState, useContext} from "react";
+import {useMemo, useCallback, useEffect, useState, useContext} from "react";
 import {useHttp} from "./util/hooks/UseHttp";
 import {Badge, Button, Input, PageHeader, Popover, Table} from "antd";
 import {useStateWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {useNavigate} from "@reach/router";
-import {MyToastContext} from "./util/MyToastContext";
+import {MyToastContext} from "./util/context/MyToastContext";
 import {ERROR_TOAST, SUCCESS_TOAST} from "./App";
 import {SyncOutlined} from "@ant-design/icons";
 import debounce from "lodash/debounce" ;
+import {PlaylistContext} from "./util/context/PlaylistContext";
 
+
+export function songsExist(playlist) {
+    return playlist && playlist.songs && playlist.songs.length > 0;
+}
 
 export default function Playlist(props) {
+    let playlistContext = useContext(PlaylistContext);
     let toastContext = useContext(MyToastContext);
     let [fetchedSongs, setFetchedSongs] = useState(false);
     let sendRequest = useHttp();
@@ -25,9 +31,14 @@ export default function Playlist(props) {
     let [selectedPlaylist, setSelectedPlaylist] = useState([]);
     let [filteredRows, setFilteredRows] = useState([]);
     let [isDataLoading, setIsDataLoading] = useState(false);
-    let [foundDuplicate, setFoundDuplicate] = useState(false);
-    let playlist = props.location.state.playlist
-    let [songsInPlaylist, setSongsInPlaylist] = useStateWithSessionStorage(playlist.playlistId, playlist.songs || []);
+    let [duplicateSongs, setDuplicateSongs] = useState(false);
+    let [lookedForDuplicates, setLookedForDuplicates] = useState(false);
+
+    let playlistId = props.playlistId
+    let playlist = useMemo(() => {
+        return playlistContext.playlists.find((pl) => pl.playlistId === playlistId) || {title: "", songs: []}
+    }, [playlistContext.playlists, playlistId])
+
     let [showPlaylistOptions, setShowPlaylistOptions] = useState(false);
     let [filteringByDupes, setFilteringByDupes] = useState(false);
     let nav = useNavigate();
@@ -41,8 +52,7 @@ export default function Playlist(props) {
         let filteredIds = filteredRows.map((song) => song.videoId)
         let selectedIds = selectedRows.map((song) => song.videoId)
         setIsDataLoading(true);
-        sendRequest(`/songs/${playlist.playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`,
-            "GET")
+        sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
                 let tracks = resp.tracks.map((track, index) => {
                     // convert a list of artists to a string
@@ -56,7 +66,8 @@ export default function Playlist(props) {
 
                     return track;
                 });
-                setSongsInPlaylist(tracks || []);
+                playlistContext.setSongs(playlistId, tracks)
+
                 // if the user had filtered songs before refreshing: enforce the filter again
                 if (filteredIds) {
                     let newFilteredRows = tracks.filter((song) => filteredIds.includes(song.videoId))
@@ -72,23 +83,24 @@ export default function Playlist(props) {
             .catch((resp) => {
                 console.log("ERROR")
                 console.log(resp)
-                setSongsInPlaylist([])
                 setIsDataLoading(false);
                 toastContext.addToast("Error loading data", ERROR_TOAST)
             })
-    }, [filteredRows, playlist.playlistId, selectedRows, sendRequest, setSongsInPlaylist, toastContext])
+    }, [filteredRows, playlistId, playlistContext, selectedRows, sendRequest, toastContext])
 
     useEffect(() => {
         // fetch song data from backend if not done already
-        if ((!songsInPlaylist || songsInPlaylist.length === 0) && !fetchedSongs) {
+        if (playlistId && !songsExist(playlist) && !fetchedSongs) {
             setFetchedSongs(true);
+            setLookedForDuplicates(false);
             fetchSongs();
-        } else {
+        } else if (songsExist(playlist) && !lookedForDuplicates) {
             // search for duplicates in the list of songs
-            let dupes = songsInPlaylist.filter((song) => song.is_dupe)
-            setFoundDuplicate(dupes.length > 0);
+            let dupes = playlist.songs.filter((song) => song.is_dupe)
+            setDuplicateSongs(dupes);
+            setLookedForDuplicates(true);
         }
-    }, [fetchSongs, fetchedSongs, songsInPlaylist, setFoundDuplicate, foundDuplicate])
+    }, [fetchSongs, fetchedSongs, lookedForDuplicates, playlist, playlistId])
 
     /**
      * Called when the user clicks on one of the table headers. This sorts all songs based on the header that was clicked
@@ -120,13 +132,12 @@ export default function Playlist(props) {
         }
 
         // do the sorting
-        let sortedFilterRows = filteredRows;
-        sortedFilterRows = filteredRows.sort(sortFunction)
-        let sortedSongsInPlaylist = songsInPlaylist.sort(sortFunction)
+        let sortedFilterRows = filteredRows.sort(sortFunction)
+        let sortedSongs = playlist.songs.sort(sortFunction)
 
         // set the state
         setFilteredRows(sortedFilterRows);
-        setSongsInPlaylist(sortedSongsInPlaylist);
+        playlistContext.setSongs(sortedSongs);
     }
 
     // Define the columns in the <Table>
@@ -172,18 +183,16 @@ export default function Playlist(props) {
         sendRequest("/removeSongs", options)
             .then((resp) => {
                 // if we succeeded - remove the selected songs from the playlist
-                let newSongsInPlaylist = songsInPlaylist.filter((s) => {
-                    return !selectedRowIds.includes(s.setVideoId);
-                })
-                setSongsInPlaylist(newSongsInPlaylist);
+                playlistContext.removeSongs(playlistId, selectedRows.map((song) => song.setVideoId))
 
-                // remove the selected songs from the currently filtered rows
+                // remove the selected songs from the currently filtered rows (if rows are filtered)
                 let newFilteredRows = filteredRows.filter((s) => {
                     return !selectedRowIds.includes(s.setVideoId);
                 })
                 setFilteredRows(newFilteredRows)
 
                 toastContext.addToast("Successfully removed songs", SUCCESS_TOAST)
+                // de-select all rows
                 setSelectedRows([])
             })
             .catch((resp) => {
@@ -273,8 +282,8 @@ export default function Playlist(props) {
      */
     function filterDupes() {
         if (!filteringByDupes) {
-            let filteredSongIds = songsInPlaylist.filter((song) => song.is_dupe).map((song) => song.videoId)
-            let filteredSongs = songsInPlaylist.filter((song) => filteredSongIds.includes(song.videoId))
+            let filteredSongIds = playlist.songs.filter((song) => song.is_dupe).map((song) => song.videoId)
+            let filteredSongs = playlist.songs.filter((song) => filteredSongIds.includes(song.videoId))
             setFilteredRows(filteredSongs);
         } else {
             setFilteredRows([])
@@ -328,7 +337,7 @@ export default function Playlist(props) {
         values.forEach((value) => {
             value = value.toLowerCase();
             if (value && value.trim()) {
-                let filteredRows = songsInPlaylist.filter((song) => {
+                let filteredRows = playlist.songs.filter((song) => {
                     return song.title.toString().toLowerCase().includes(value) ||
                         song.artists.toString().toLowerCase().includes(value) ||
                         song.album.toString().toLowerCase().includes(value)
@@ -345,13 +354,13 @@ export default function Playlist(props) {
             <PageHeader
                 onBack={()=> nav("/")}
                 title={(
-                    <div>{playlist.title}
+                    <div>{playlist && playlist.title ? playlist.title : ""}
                         {" "}
                         <Button onClick={() => fetchSongs(true)}> <SyncOutlined /> </Button>
                         {" "}
-                        {foundDuplicate && (
+                        {(duplicateSongs && duplicateSongs.length > 0) && (
                             <Button onClick={filterDupes}>
-                                <Badge count={"Dupes found"}/>
+                                <Badge count={`Dupes found (${duplicateSongs.length})`}/>
                             </Button>
                             )}
                     </div>)}
@@ -409,7 +418,7 @@ export default function Playlist(props) {
                 sticky={{offsetHeader: 50+66+24}}
                 columns={columns}
                 loading={isDataLoading}
-                dataSource={filteredRows && filteredRows.length > 0 ? filteredRows : songsInPlaylist}
+                dataSource={filteredRows && filteredRows.length > 0 ? filteredRows : playlist.songs}
                 onChange={tableSortChange}
                 pagination={{position: ["topRight", "bottomRight"], defaultPageSize: 100,
                     pageSizeOptions: [100, 1000, 10000],
