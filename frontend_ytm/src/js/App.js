@@ -20,51 +20,12 @@ export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
 export const WARNING_TOAST = "WARNING";
 export const ERROR_TOAST = "ERROR";
-
 function App() {
     // let [playlists, playlistsDispatch] = useReducerWithSessionStorage("playlist-manager-playlists", playlistReducer, []);
     let [playlists, playlistsDispatch] = useReducer(playlistReducer, []);
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
 
-    const setPlaylists = useCallback((playlists) => {
-        playlistsDispatch({type: SET_PLAYLISTS, payload: {playlists: playlists}})
-    }, [playlistsDispatch])
-
-    function setSongsForPlaylist(playlistId, songs) {
-        playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId}})
-    }
-    function addSongsToPlaylist(playlistId, songs) {
-        playlistsDispatch({type: ADD_SONGS, payload: {songs: songs, playlistId: playlistId}})
-    }
-    function removeSongsFromPlaylist(playlistId, setVideoIds) {
-        playlistsDispatch({type: REMOVE_SONGS, payload: {setVideoIds: setVideoIds, playlistId: playlistId}})
-    }
-
-    /**
-     * Fetch the list of playlists from the backend
-     * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
-     */
-    const loadPlaylists = useCallback((forceRefresh) => {
-        // console.log("load playlists")
-        return sendRequest(`/playlists?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
-            .then((resp) => {
-                setPlaylists(resp);
-            })
-            .catch((error) => {
-                console.log(error);
-            })
-    }, [sendRequest, setPlaylists])
-
-
-    useEffect(() => {
-        // load the list of playlists from the backend if not done already
-        // console.log("useeffect")
-        if (!loadedPlaylists) {
-            loadPlaylists()
-            setLoadedPlaylists(true);
-        }
-    }, [loadPlaylists, loadedPlaylists, setLoadedPlaylists])
 
     /**
      * Helper function to add a unicode character at the beginning of a string
@@ -109,10 +70,77 @@ function App() {
     }, [addUnicodeToToast])
 
 
+
+    const setPlaylists = useCallback((playlists) => {
+        playlistsDispatch({type: SET_PLAYLISTS, payload: {playlists: playlists}})
+    }, [playlistsDispatch])
+
+    function setSongsForPlaylist(playlistId, songs) {
+        playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId, removeSongs: removeSongsFromPlaylist}})
+    }
+    function addSongsToPlaylist(playlistId, songs) {
+        playlistsDispatch({type: ADD_SONGS, payload: {songs: songs, playlistId: playlistId, removeSongs: removeSongsFromPlaylist}})
+    }
+    const removeSongsFromState = useCallback((playlistId, songs) => {
+        playlistsDispatch({type: REMOVE_SONGS, payload: {songs: songs, playlistId: playlistId, removeSongs: removeSongsFromPlaylist}})
+    }, [])
+
+    /**
+     * Removes the given songs from the given playlist
+     * Each songObject must have a videoId and setVideoId property
+     */
+    const removeSongsFromPlaylist = useCallback((playlistId, songObjects) => {
+        let options = {
+            method: "PUT",
+            body: {
+                playlist: playlistId,
+                songs: songObjects
+            }
+        }
+        return sendRequest("/removeSongs", options)
+            .then((resp) => {
+                removeSongsFromState(playlistId, songObjects)
+                addToast("Successfully removed songs", SUCCESS_TOAST)
+                return resp;
+            })
+            .catch((resp) => {
+                console.log("Error removing songs:")
+                console.log(resp)
+                addToast("Error removing songs", ERROR_TOAST)
+                return resp;
+            })
+    }, [addToast, removeSongsFromState, sendRequest])
+
+    /**
+     * Fetch the list of playlists from the backend
+     * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
+     */
+    const loadPlaylists = useCallback((forceRefresh) => {
+        // console.log("load playlists")
+        return sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
+            .then((resp) => {
+                setPlaylists(resp);
+            })
+            .catch((error) => {
+                console.log(error);
+            })
+    }, [sendRequest, setPlaylists])
+
+
+    useEffect(() => {
+        // load the list of playlists from the backend if not done already
+        // console.log("useeffect")
+        if (!loadedPlaylists) {
+            loadPlaylists()
+            setLoadedPlaylists(true);
+        }
+    }, [loadPlaylists, loadedPlaylists, setLoadedPlaylists])
+
     return (
       <div>
           <PlaylistContext.Provider value={{playlists: playlists, addSongs: addSongsToPlaylist,
-              setSongs: setSongsForPlaylist, removeSongs: removeSongsFromPlaylist}}>
+              setSongs: setSongsForPlaylist, removeSongs: removeSongsFromPlaylist,
+              removeSongsFromState: removeSongsFromState}}>
           <MyToastContext.Provider value={{addToast: addToast}}>
               <ToastContainer
                   position="top-right"

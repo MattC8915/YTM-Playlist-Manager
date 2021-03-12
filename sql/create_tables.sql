@@ -1,22 +1,32 @@
+create table if not exists thumbnail(
+    id varchar unique,
+    primary key (id)
+);
+
+create table if not exists thumbnail_download(
+    thumbnail_id varchar references thumbnail(id) on delete cascade ,
+    downloaded boolean,
+    size int,
+    filepath varchar,
+    primary key (thumbnail_id, size)
+);
+
 create table if not exists playlist (
     id varchar unique,
     name varchar,
-    thumbnail_url varchar,
-    thumbnail_filepath varchar
+    thumbnail_id varchar references thumbnail(id) on delete cascade
 );
 
 create table if not exists artist (
     id varchar unique,
     name varchar,
-    thumbnail_url varchar,
-    thumbnail_filepath varchar
+    thumbnail_id varchar references thumbnail(id) on delete cascade
 );
 
 create table if not exists album (
     id varchar unique,
     name varchar,
-    thumbnail_url varchar,
-    thumbnail_filepath varchar
+    thumbnail_id varchar references thumbnail(id) on delete cascade
 );
 
 create table if not exists song(
@@ -38,8 +48,9 @@ create table if not exists artist_songs(
 create table if not exists songs_in_playlist(
     playlist_id varchar references playlist(id) on delete cascade,
     song_id varchar references song(id) on delete cascade,
-    set_video_id varchar,
-    primary key (playlist_id, song_id, set_video_id)
+    set_video_id varchar unique ,
+    datetime_added int,
+    primary key (playlist_id, set_video_id)
 );
 
 create type data_type as enum ('playlist', 'song', 'album', 'artist', 'thumbnail', 'library');

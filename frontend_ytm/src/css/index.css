@@ -1,3 +1,7 @@
+.ant-table-cell {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
 .dupe {
     background-color: rgba(256, 0, 0, .4);
 }
@@ -49,4 +53,8 @@
     z-index: 100;
     background: white;
     padding: 10px;
+}
+
+.refresh-button {
+    padding: 0 10px 0 10px !important;
 }

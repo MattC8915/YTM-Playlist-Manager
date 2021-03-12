@@ -12,9 +12,11 @@ import {useStateWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {useNavigate} from "@reach/router";
 import {MyToastContext} from "./util/context/MyToastContext";
 import {ERROR_TOAST, SUCCESS_TOAST} from "./App";
-import {SyncOutlined} from "@ant-design/icons";
+import {MinusSquareOutlined, SyncOutlined} from "@ant-design/icons";
 import debounce from "lodash/debounce" ;
 import {PlaylistContext} from "./util/context/PlaylistContext";
+import Thumbnail from "./Thumbnail";
+import Checkbox from "antd/lib/checkbox/Checkbox";
 
 
 export function songsExist(playlist) {
@@ -26,16 +28,18 @@ export default function Playlist(props) {
     let toastContext = useContext(MyToastContext);
     let [fetchedSongs, setFetchedSongs] = useState(false);
     let sendRequest = useHttp();
-    let [selectedRows, setSelectedRows] = useState([]);
     let [selectedRowIds, setSelectedRowIds] = useState([]);
     let [selectedPlaylist, setSelectedPlaylist] = useState([]);
     let [filteredRows, setFilteredRows] = useState([]);
     let [isDataLoading, setIsDataLoading] = useState(false);
     let [duplicateSongs, setDuplicateSongs] = useState(false);
     let [lookedForDuplicates, setLookedForDuplicates] = useState(false);
+    let [albumView, setAlbumView] = useState(false);
 
+    let [updatePlaylistMemo, setUpdatePlaylistMemo] = useState(false);
     let playlistId = props.playlistId
     let playlist = useMemo(() => {
+        console.log("use memo")
         return playlistContext.playlists.find((pl) => pl.playlistId === playlistId) || {title: "", songs: []}
     }, [playlistContext.playlists, playlistId])
 
@@ -44,39 +48,70 @@ export default function Playlist(props) {
     let nav = useNavigate();
 
     /**
+     * Returns the song objects that are currently selected
+     */
+    const getSelectedSongs = useCallback(() => {
+        let songs =  playlist.songs.filter((song) => selectedRowIds.includes(song.id))
+        if (albumView) {
+            let albums = playlist.albumView.filter((album) => selectedRowIds.includes(album.id))
+            songs.push(...albums)
+        }
+        return songs
+    }, [albumView, playlist.albumView, playlist.songs, selectedRowIds])
+
+
+    /**
+     * Removes the currently selected songs from this playlist
+     */
+    function removeSelectedRows() {
+        let selectedSongs = getSelectedSongs()
+        if (albumView) {
+            // filter out the albums
+            selectedSongs = selectedSongs.filter((row) => row.setVideoId)
+        }
+        playlistContext.removeSongs(playlistId, selectedSongs)
+            .then((resp) => {
+                // remove the selected songs from the currently filtered rows (if rows are filtered)
+                let newFilteredRows = filteredRows.filter((s) => {
+                    return !selectedRowIds.includes(s.setVideoId);
+                })
+                setFilteredRows(newFilteredRows)
+
+                // de-select all rows
+                setSelectedRowIds([])
+                setUpdatePlaylistMemo(!setUpdatePlaylistMemo)
+            })
+            .catch((resp) => {
+                fetchSongs(true)
+            })
+    }
+
+    /**
      * Get all the songs in this playlist from the backend.
      * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
      */
     const fetchSongs = useCallback((forceRefresh) => {
         // save the ids of the filtered rows and the selected rows, so they can be filtered/selected again after retrieving data
         let filteredIds = filteredRows.map((song) => song.videoId)
-        let selectedIds = selectedRows.map((song) => song.videoId)
+        let selectedIds = getSelectedSongs()
         setIsDataLoading(true);
         sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
-                let tracks = resp.tracks.map((track, index) => {
-                    // convert a list of artists to a string
-                    track.artists = track.artists.map((s) => s.name).join(", ")
-
-                    // map albums objects to the album name
-                    track.album = track.album ? track.album.name : ""
-
-                    // add an index, so we can preserve the original order of the songs
-                    track.index = index;
-
-                    return track;
-                });
+                let tracks = resp.tracks
                 playlistContext.setSongs(playlistId, tracks)
+                setUpdatePlaylistMemo(!setUpdatePlaylistMemo)
 
                 // if the user had filtered songs before refreshing: enforce the filter again
                 if (filteredIds) {
+                    // TODO fix me
                     let newFilteredRows = tracks.filter((song) => filteredIds.includes(song.videoId))
                     setFilteredRows(newFilteredRows);
                 }
                 // if the user had selected songs before refreshing: select those songs again
                 if (selectedIds) {
-                    let newSelectedRows = tracks.filter((song) => filteredIds.includes(song.videoId))
-                    setSelectedRows(newSelectedRows);
+                    // TODO fix me
+                    let newSelectedRowIds = tracks.filter((song) => filteredIds.includes(song.videoId)).map((song) => song.id)
+                    setSelectedRowIds(newSelectedRowIds);
                 }
                 setIsDataLoading(false);
             })
@@ -86,11 +121,11 @@ export default function Playlist(props) {
                 setIsDataLoading(false);
                 toastContext.addToast("Error loading data", ERROR_TOAST)
             })
-    }, [filteredRows, playlistId, playlistContext, selectedRows, sendRequest, toastContext])
+    }, [filteredRows, getSelectedSongs, playlistContext, playlistId, sendRequest, toastContext])
 
     useEffect(() => {
-        // fetch song data from backend if not done already
         if (playlistId && !songsExist(playlist) && !fetchedSongs) {
+            // fetch song data from backend if not done already
             setFetchedSongs(true);
             setLookedForDuplicates(false);
             fetchSongs();
@@ -100,6 +135,8 @@ export default function Playlist(props) {
             setDuplicateSongs(dupes);
             setLookedForDuplicates(true);
         }
+        console.log("useeffect")
+        console.log(playlist.title + " " + playlist.count)
     }, [fetchSongs, fetchedSongs, lookedForDuplicates, playlist, playlistId])
 
     /**
@@ -137,11 +174,23 @@ export default function Playlist(props) {
 
         // set the state
         setFilteredRows(sortedFilterRows);
-        playlistContext.setSongs(sortedSongs);
+        playlistContext.setSongs(playlistId, sortedSongs);
+        setUpdatePlaylistMemo(!setUpdatePlaylistMemo)
     }
 
-    // Define the columns in the <Table>
+    // Define the columns in the for the playlist
     const columns = [
+        {
+            title: "Thumbnail",
+            dataIndex: "thumbnail",
+            key: "thumbnail",
+            render: (text, record) => {
+                return (
+                    <Thumbnail size={60}
+                               thumbnail={record.thumbnail}/>
+                )
+            },
+        },
         {
             title: "Title",
             dataIndex: "title",
@@ -151,14 +200,14 @@ export default function Playlist(props) {
         },
         {
             title: "Artist",
-            dataIndex: "artists",
-            key: "artists",
+            dataIndex: "artistsString",
+            key: "artistsString",
             sorter: true
         },
         {
             title: "Album",
-            dataIndex: "album",
-            key: "album",
+            dataIndex: "albumString",
+            key: "albumString",
             sorter: true
         },
         {
@@ -167,42 +216,19 @@ export default function Playlist(props) {
             key: "duration",
             sorter: true
         },
+        {
+            title: "Playlists",
+            dataIndex: "otherPlaylistsRender",
+            key: "otherPlaylistsRender",
+            sorter: true
+        },
+        {
+            title: "Index",
+            dataIndex: "index",
+            key: "index",
+            sorter: true
+        },
     ]
-
-    /**
-     * Removes the currently selected songs from this playlist
-     */
-    function removeSelectedRows() {
-        let options = {
-            method: "PUT",
-            body: {
-                playlist: playlist.playlistId,
-                songs: selectedRows
-            }
-        }
-        sendRequest("/removeSongs", options)
-            .then((resp) => {
-                // if we succeeded - remove the selected songs from the playlist
-                playlistContext.removeSongs(playlistId, selectedRows.map((song) => song.setVideoId))
-
-                // remove the selected songs from the currently filtered rows (if rows are filtered)
-                let newFilteredRows = filteredRows.filter((s) => {
-                    return !selectedRowIds.includes(s.setVideoId);
-                })
-                setFilteredRows(newFilteredRows)
-
-                toastContext.addToast("Successfully removed songs", SUCCESS_TOAST)
-                // de-select all rows
-                setSelectedRows([])
-            })
-            .catch((resp) => {
-                console.log("Error removing songs:")
-                console.log(resp)
-                fetchSongs(true)
-                toastContext.addToast("Error removing songs", ERROR_TOAST)
-            })
-    }
-
 
     /**
      * Display success/failure toasts after I get a response from the server after trying to add songs to a playlist
@@ -215,7 +241,7 @@ export default function Playlist(props) {
                 key: "already_there",
                 toastString: "are already in the playlist",
                 is_success: false
-            }, 
+            },
             {
                 key: "failed",
                 toastString: "failed for an unknown reason",
@@ -231,17 +257,18 @@ export default function Playlist(props) {
         responseToastData.forEach((data) => {
             // find the song names that are in this list
             if (resp[data.key]) {
-                let songStr = selectedRows
+                let songStr = getSelectedSongs()
                     .filter((song) => resp[data.key].includes(song.videoId))
                     .map((song) => song.title)
                     .join(" | ");
                 if (songStr) {
                     toastCreated = true;
+                    // determine the color of the toast
+                    let toastColor = data.is_success ? SUCCESS_TOAST : ERROR_TOAST
+                    // the toast should stay open if the failure reason is unknown
+                    let toastStayOpen = data.key === "failed"
                     toastContext.addToast(`The following songs ${data.toastString}: ${songStr}`,
-                        // determine the color of the toast
-                        data.is_success ? SUCCESS_TOAST : ERROR_TOAST,
-                        // the toast should stay open if the failure reason is unknown
-                        data.key === "failed")
+                        toastColor, toastStayOpen)
                 }
             }
         })
@@ -255,7 +282,10 @@ export default function Playlist(props) {
          * Send request to server to add the currently selected songs to the selected playlist
          * @type {*[]}
          */
-        let selectedIds = selectedRows.map((sr) => sr.videoId)
+        let selectedIds = getSelectedSongs().map((song) => song.videoId)
+            // remove null values
+            // .filter((row) => row)
+
         let options = {
             method: "PUT",
             body: {
@@ -312,8 +342,8 @@ export default function Playlist(props) {
                 pagination={{defaultPageSize: 10000}}
                 rowSelection={{
                     type: "radio",
-                    onChange: (selectedRowKeys, selectedRows) => {
-                        setSelectedPlaylist(selectedRows[0])
+                    onChange: (selectedRowKeys, selectedPlaylistRows) => {
+                        setSelectedPlaylist(selectedPlaylistRows[0])
                     },
                 }}
             />
@@ -339,8 +369,9 @@ export default function Playlist(props) {
             if (value && value.trim()) {
                 let filteredRows = playlist.songs.filter((song) => {
                     return song.title.toString().toLowerCase().includes(value) ||
-                        song.artists.toString().toLowerCase().includes(value) ||
-                        song.album.toString().toLowerCase().includes(value)
+                        song.artistsString.toString().toLowerCase().includes(value) ||
+                        song.albumString.toString().toLowerCase().includes(value) ||
+                        song.playlistsString.toString().toLowerCase().includes(value)
                 });
                 filteredRows.forEach((row) => filteredSet.add(row))
             }
@@ -356,14 +387,25 @@ export default function Playlist(props) {
                 title={(
                     <div>{playlist && playlist.title ? playlist.title : ""}
                         {" "}
-                        <Button onClick={() => fetchSongs(true)}> <SyncOutlined /> </Button>
+                        <Button className={"refresh-button"}
+                                onClick={() => fetchSongs(true)}>
+                            <SyncOutlined />
+                        </Button>
                         {" "}
                         {(duplicateSongs && duplicateSongs.length > 0) && (
                             <Button onClick={filterDupes}>
                                 <Badge count={`Dupes found (${duplicateSongs.length})`}/>
                             </Button>
-                            )}
-                    </div>)}
+                        )}
+                        <Checkbox
+                            checked={albumView}
+                            onChange={(e) => setAlbumView(!albumView)}>
+                            <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
+                                Album View
+                            </div>
+                        </Checkbox>
+                    </div>
+                )}
             />
 
             {/*Add / remove buttons*/}
@@ -371,7 +413,7 @@ export default function Playlist(props) {
                 {/*Remove button*/}
                 <Button danger
                         style={{marginLeft: '10px'}}
-                        disabled={selectedRows.length === 0}
+                        disabled={selectedRowIds.length === 0}
                         onClick={removeSelectedRows}>
                     Remove from playlist
                 </Button>
@@ -387,7 +429,7 @@ export default function Playlist(props) {
                     <Button
                         type={'primary'}
                         style={{margin: '0 50px 0 10px'}}
-                        disabled={selectedRows.length === 0}>
+                        disabled={selectedRowIds.length === 0}>
                         Add to playlist
                     </Button>
                 </Popover>
@@ -408,9 +450,39 @@ export default function Playlist(props) {
                 rowSelection={{
                     selectedRowKeys: selectedRowIds,
                     type: "checkbox",
-                    onChange: (selectedRowKeys, selectedRows) => {
-                        setSelectedRowIds(selectedRowKeys)
-                        setSelectedRows(selectedRows)
+                    checkStrictly: true,
+                    onChange: (newSelectedRowIds, newSelectedRows) => {
+                        // if I just selected an album - select all its songs
+                        let newAlbums = newSelectedRows.filter((row) => !row.setVideoId && !selectedRowIds.includes(row.id))
+                        if (newAlbums && newAlbums.length > 0) {
+                            console.log("new albums")
+                            console.log(newAlbums)
+                            let newChildrenIds = []
+                            newAlbums.forEach((album) => {
+                                let songIds = album.children.map((song) => song.id)
+                                newChildrenIds.push(...songIds)
+                            })
+                            console.log(newChildrenIds, "will be added to", newSelectedRowIds)
+                            newChildrenIds = newChildrenIds.filter((childId) => !newSelectedRowIds.includes(childId))
+                            newSelectedRowIds.push(...newChildrenIds)
+                            console.log(newSelectedRowIds)
+                        }
+
+                        // if I just deselected an album - deselect all its songs
+                        let removedAlbums = getSelectedSongs().filter((row) => !row.setVideoId && !newSelectedRowIds.includes(row.id))
+                        if (removedAlbums && removedAlbums.length > 0) {
+                            console.log("removed albums")
+                            let removedChildren = []
+                            removedAlbums.forEach((album) => {
+                                let songIds = album.children.map((song) => song.id)
+                                removedChildren.push(...songIds)
+                            })
+                            console.log(removedChildren, "will be removed from", newSelectedRowIds)
+                            newSelectedRowIds = newSelectedRowIds.filter((row) => !removedChildren.includes(row))
+                            console.log(newSelectedRowIds)
+                        }
+
+                        setSelectedRowIds(newSelectedRowIds)
                     },
                 }}
                 scroll={{scrollToFirstRowOnChange: true}}
@@ -418,12 +490,12 @@ export default function Playlist(props) {
                 sticky={{offsetHeader: 50+66+24}}
                 columns={columns}
                 loading={isDataLoading}
-                dataSource={filteredRows && filteredRows.length > 0 ? filteredRows : playlist.songs}
+                dataSource={filteredRows && filteredRows.length > 0 ? filteredRows : albumView ? playlist.albumView : playlist.songs}
                 onChange={tableSortChange}
                 pagination={{position: ["topRight", "bottomRight"], defaultPageSize: 100,
                     pageSizeOptions: [100, 1000, 10000],
                     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}}
-                rowKey={"setVideoId"}
+                rowKey={"id"}
                 size={"small"}
             />
         </div>

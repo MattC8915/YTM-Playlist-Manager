@@ -4,8 +4,10 @@ This service determines whether data should be retrieved from the database or th
 from datetime import datetime, timedelta
 from enum import Enum
 
-from db.db_service import executeSQLFetchOne, executeSQL
-from db.ytm_db_service import getPlaylistsFromDb, persistAllPlaylists, getPlaylistSongsFromDb, persistPlaylistSongs
+from db import data_models as dm
+from db.db_service import executeSQLFetchOne, executeSQL, executeSQLFetchAll
+from db.ytm_db_service import getPlaylistsFromDb, persistAllPlaylists, getPlaylistSongsFromDb, persistPlaylistSongs, \
+    getNumSongsInPlaylist
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
 from ytm_api.ytm_service import findDuplicatesAndAddFlag
 
@@ -21,7 +23,7 @@ class DataType(Enum):
     SONG = ("song", 30)
     ARTIST = ("artist", 7)
     ALBUM = ("album", 30)
-    THUMBNAIL = ("thumbnail", 14)
+    THUMBNAIL = ("thumbnail", 1000)
 
     def __new__(cls, data_type, cache_time):
         entry = object.__new__(cls)
@@ -75,36 +77,39 @@ class CachedData:
         data = item_id, self.data_type.value, datetime.now().timestamp()
         executeSQL(insert, data)
 
-    def getData(self, data_id, ignore_cache):
+    def getData(self, data_id, ignore_cache, extra_data=None):
         """
         Get data. Either from the database or YTM.
         We use the api if ignore_cache is true OR the cache for this item has been invalidated.
         Items in the cache are invalidated when a certain amount of time has gone by, specified in the DataType enum
+        :param extra_data:
         :param data_id:
         :param ignore_cache:
         :return:
         """
         if ignore_cache or not self.shouldUseCache(data_id):
-            data = self.getDataFromYTMWrapper(data_id)
+            data = self.getDataFromYTMWrapper(data_id, extra_data)
         else:
-            data = self.getDataFromDb(data_id)
+            data = self.getDataFromDb(data_id, extra_data)
         return self.additionalDataProcessing(data)
 
-    def getDataFromYTMWrapper(self, data_id):
+    def getDataFromYTMWrapper(self, data_id, extra_data=None):
         """
         Get data from YTM. If there's an authentication error this attempts to re-setup the ytm client.
         Updates the db cache after getting data.
+        :param extra_data:
         :param data_id:
         :return:
         """
         try:
-            resp = self.getDataFromYTM(data_id)
+            resp = self.getDataFromYTM(data_id, extra_data)
             self.updateCache(data_id)
             return resp
-        except AttributeError as e:
+        except Exception as e:
+            # catch exception here because that's what is thrown ...
             if "403" in str(e) or "has no attribute" in str(e):
                 setupYTMClient()
-                return self.getDataFromYTM(data_id)
+                return self.getDataFromYTM(data_id, extra_data)
             else:
                 raise e
 
@@ -117,10 +122,10 @@ class CachedData:
         """
         return data
 
-    def getDataFromDb(self, data_id):
+    def getDataFromDb(self, data_id, extra_data=None):
         raise NotImplementedError("something wrong")
 
-    def getDataFromYTM(self, data_id):
+    def getDataFromYTM(self, data_id, extra_data=None):
         raise NotImplementedError("uh oh")
 
 
@@ -128,24 +133,29 @@ class CachedLibrary(CachedData):
     """
     Provides db and api access to my library (my list of playlists)
     """
+
     def __init__(self):
         super().__init__()
         self.data_type = DataType.LIBRARY
 
-    def getDataFromDb(self, data_id):
+    def getDataFromDb(self, data_id, extra_data=None):
         resp = getPlaylistsFromDb(convert_to_json=True)
         return resp
 
-    def getDataFromYTM(self, data_id):
-        resp = getYTMClient().get_library_playlists(limit=100)
-        persistAllPlaylists(resp)
-        return resp
+    def getDataFromYTM(self, data_id, extra_data=None):
+        playlist_list = getYTMClient().get_library_playlists(limit=100)
+        playlist_objs = [dm.Playlist.from_json(pl) for pl in playlist_list]
+        persistAllPlaylists(playlist_objs)
+        for pl_obj in playlist_objs:
+            pl_obj.numSongs = getNumSongsInPlaylist(pl_obj.playlist_id)
+        return [pl.to_json() for pl in playlist_objs]
 
 
 class CachedPlaylist(CachedData):
     """
     Provides db and api access to a playlist
     """
+
     def __init__(self):
         super().__init__()
         self.data_type = DataType.PLAYLIST
@@ -155,23 +165,44 @@ class CachedPlaylist(CachedData):
         findDuplicatesAndAddFlag(data["tracks"])
         return data
 
-    def getDataFromDb(self, data_id):
+    def getDataFromDb(self, data_id, extra_data=None):
         # get songs from db
-        tracks = getPlaylistSongsFromDb(data_id, convert_to_json=True)
-        playlist_obj = getPlaylistsFromDb(convert_to_json=False, playlist_id=data_id)
-        resp = {"tracks": tracks, "id": playlist_obj.playlist_id, "title": playlist_obj.name}
-        return resp
+        tracks = getPlaylistSongsFromDb(data_id, convert_to_json=False)
+        playlist_obj: dm.Playlist = getPlaylistsFromDb(convert_to_json=False, playlist_id=data_id)
+        playlist_obj.songs = tracks
+        return playlist_obj.to_json()
 
-    def getDataFromYTM(self, data_id):
-        # delete = "DELETE FROM songs_in_playlist " \
-        #          "WHERE playlist_id = %s"
-        # data = playlist_id,
-        # executeSQL(delete, data)
+    def getDataFromYTM(self, data_id, extra_data=None):
         # get songs from YTM
         resp = getYTMClient().get_playlist(data_id, limit=10000)
+        playlist_obj = dm.Playlist.from_json(resp)
         # persist them
-        persistPlaylistSongs(data_id, resp["tracks"])
-        return resp
+        persistPlaylistSongs(data_id, playlist_obj.songs)
+        return playlist_obj.to_json()
+
+
+class CachedThumbnail(CachedData):
+    def __init__(self):
+        super().__init__()
+        self.data_type = DataType.THUMBNAIL
+
+    def getDataFromDb(self, data_id, extra_data=None):
+        select = "SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download " \
+                 "where thumbnail_id = %s"
+        size = extra_data.get("size")
+        data = data_id,
+        if size:
+            select += " and size = %s"
+            data += size,
+        result = executeSQLFetchOne(select, data)
+        result_obj = dm.Thumbnail.from_db(result) if result else None
+        # if it isn't in the db: create it
+        if not result_obj:
+            return dm.Thumbnail(data_id, None, size, False)
+        return result_obj
+
+    def getDataFromYTM(self, data_id, extra_data=None):
+        return self.getDataFromDb(data_id, extra_data)
 
 
 class CachedAlbum(CachedData):
@@ -179,10 +210,10 @@ class CachedAlbum(CachedData):
         super().__init__()
         self.data_type = DataType.ALBUM
 
-    def getDataFromDb(self, data_id):
+    def getDataFromDb(self, data_id, extra_data=None):
         return None
 
-    def getDataFromYTM(self, data_id):
+    def getDataFromYTM(self, data_id, extra_data=None):
         return None
 
 
@@ -191,15 +222,16 @@ class CachedArtist(CachedData):
         super().__init__()
         self.data_type = DataType.ARTIST
 
-    def getDataFromDb(self, data_id):
+    def getDataFromDb(self, data_id, extra_data=None):
         return None
 
-    def getDataFromYTM(self, data_id):
+    def getDataFromYTM(self, data_id, extra_data=None):
         return None
 
 
 library_cache = CachedLibrary()
 playlist_cache = CachedPlaylist()
+thumbnail_cache = CachedThumbnail()
 album_cache = CachedAlbum()
 artist_cache = CachedArtist()
 
@@ -210,6 +242,15 @@ def getAllPlaylists(ignore_cache):
 
 def getPlaylist(playlist_id, ignore_cache):
     return playlist_cache.getData(playlist_id, ignore_cache)
+
+
+def getThumbnail(thumbnail_id, ignore_cache=False, size=None):
+    if not thumbnail_id:
+        return None
+    extra_data = {} if not size else {"size": size}
+    thumbnail_id = dm.getThumbnailId(thumbnail_id)
+    return thumbnail_cache.getData(data_id=thumbnail_id, ignore_cache=ignore_cache,
+                                   extra_data=extra_data)
 
 
 def getAlbum(album_id, ignore_cache):

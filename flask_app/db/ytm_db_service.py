@@ -1,8 +1,9 @@
 """ Contains methods for inserting/selecting data from the database """
-import random
-import string
+from datetime import datetime
+from typing import List
 
-from flask_app.db.data_models import Song, Playlist, Artist
+from cache import cache_service
+from flask_app.db.data_models import Song, Playlist, Artist, Thumbnail
 from flask_app.db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 
 
@@ -14,26 +15,10 @@ def getArtistId(name):
     """
     select = "SELECT id " \
              "FROM artist " \
-             "WHERE name = %s"
-    data = name,
+             "WHERE name ilike %s"
+    data = name.strip(),
     result = executeSQLFetchOne(select, data)
     return result[0] if result else None
-
-
-def createRandomCode():
-    """
-    Create a random 24 digit string
-    :return:
-    """
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=24))
-
-
-def generateArtistId():
-    """
-    Generate a unique id to be used in the artist table. This is used if YTM doesn't return an id for an artist
-    :return:
-    """
-    return f"generated_{createRandomCode()}"
 
 
 def persistAllSongData(songs_to_add, playlist_id):
@@ -46,39 +31,43 @@ def persistAllSongData(songs_to_add, playlist_id):
     :param playlist_id:
     :return:
     """
+    datetime_added = datetime.now().timestamp()
     for song in songs_to_add:
-        # persist the album
         if song.album:
-            insert_album = "INSERT INTO album (id, name, thumbnail_url, thumbnail_filepath) " \
-                           "VALUES (%s, %s, %s, %s) ON CONFLICT ON CONSTRAINT album_id_key DO NOTHING "
-            album_data = song.album.getTupleData()
-            executeSQL(insert_album, album_data)
+            # persist the album thumbnail
+            persistThumbnail(song.album.thumbnail)
+            # persist the album
+            insert_album = "INSERT INTO album (id, name, thumbnail_id) " \
+                           "VALUES (%s, %s, %s) ON CONFLICT ON CONSTRAINT album_id_key DO NOTHING "
+            album_data = song.album.to_db()
+            try:
+                executeSQL(insert_album, album_data)
+            except Exception as e:
+                print(e)
 
         # persist the song
         insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local) " \
                       "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_id_key DO NOTHING "
-        song_data = song.getTupleData()
+        song_data = song.to_db()
         executeSQL(insert_song, song_data)
 
         # persist the song/playlist relationship
-        insert_song_playlist = "INSERT INTO songs_in_playlist (playlist_id, song_id, set_video_id) VALUES (%s, %s, %s)"
-        isp_data = playlist_id, song.video_id, song.set_video_id
+        insert_song_playlist = "INSERT INTO songs_in_playlist (playlist_id, song_id, set_video_id, datetime_added) " \
+                               "VALUES (%s, %s, %s, %s)"
+        isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added
         executeSQL(insert_song_playlist, isp_data)
 
         # persist the song/artist relationships
         insert_song_artist = "INSERT INTO artist_songs (song_id, artist_id) VALUES (%s, %s) " \
                              "ON CONFLICT ON CONSTRAINT artist_songs_pkey DO NOTHING"
         # persist the artists
-        insert_artist = "INSERT INTO artist (id, name, thumbnail_url, thumbnail_filepath) " \
-                        "VALUES (%s, %s, %s, %s) ON CONFLICT ON CONSTRAINT artist_id_key DO NOTHING "
+        insert_artist = "INSERT INTO artist (id, name, thumbnail_id) " \
+                        "VALUES (%s, %s, %s) ON CONFLICT ON CONSTRAINT artist_id_key DO NOTHING "
         for artist in song.artists:
-            artist_id = artist.artist_id if artist.artist_id else getArtistId(artist.name)
-            if not artist_id:
-                artist_id = generateArtistId()
-            artist_data = (artist_id, artist.name, None, None)
+            artist_data = artist.to_db()
             executeSQL(insert_artist, artist_data)
 
-            song_artist_data = song.video_id, artist_id
+            song_artist_data = song.video_id, artist.artist_id
             executeSQL(insert_song_artist, song_artist_data)
 
 
@@ -104,9 +93,9 @@ def persistPlaylistSongs(playlist_id, new_songs):
     :param new_songs:
     :return:
     """
-
     # create Song objects for songs I just got from YTM
-    new_songs = [Song.from_json(s) for s in new_songs]
+    if len(new_songs) > 0 and isinstance(new_songs[0], dict):
+        new_songs = [Song.from_json(s, False) for s in new_songs]
     # get Song objects for existing songs in the database
     existing_songs = getPlaylistSongsFromDb(playlist_id)
 
@@ -142,17 +131,43 @@ def updateDictEntry(the_dict, key, new_val):
         the_dict[key] = list_value
 
 
-def persistAllPlaylists(playlist_list):
+def persistThumbnail(thumbnail: Thumbnail):
+    insert = "INSERT INTO thumbnail (id) VALUES (%s) " \
+             "ON CONFLICT ON CONSTRAINT thumbnail_pkey DO NOTHING "
+    data = thumbnail.thumbnail_id,
+    executeSQL(insert, data)
+
+    insert_dl = "INSERT INTO thumbnail_download (thumbnail_id, downloaded, size, filepath) " \
+                "VALUES (%s, %s, %s, %s) " \
+                "ON CONFLICT ON CONSTRAINT thumbnail_download_pkey " \
+                "DO UPDATE SET downloaded = excluded.downloaded, " \
+                "size = excluded.size, " \
+                "filepath = excluded.filepath"
+    data = thumbnail.to_db()
+    executeSQL(insert_dl, data)
+
+
+def persistAllPlaylists(playlist_list: List[Playlist]):
     """
     Persist all playlist metadata to the db
     :param playlist_list:
     :return:
     """
-    insert = "INSERT INTO playlist (id, name, thumbnail_url, thumbnail_filepath) VALUES (%s, %s, %s, %s) " \
+    insert = "INSERT INTO playlist (id, name, thumbnail_id) VALUES (%s, %s, %s) " \
              "ON CONFLICT ON CONSTRAINT playlist_id_key DO NOTHING "
     for playlist in playlist_list:
-        data = Playlist.from_json(playlist).getTupleData()
+        persistThumbnail(playlist.thumbnail)
+        data = playlist.to_db()
         executeSQL(insert, data)
+
+
+def getNumSongsInPlaylist(playlist_id):
+    select = "SELECT count(*) " \
+             "FROM songs_in_playlist " \
+             "WHERE playlist_id = %s"
+    data = playlist_id,
+    result = executeSQLFetchOne(select, data)
+    return result[0]
 
 
 def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
@@ -162,19 +177,21 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     :param convert_to_json:
     :return:
     """
+    select = "SELECT p.id, p.name, p.thumbnail_id, dc.timestamp " \
+             "from playlist as p left join data_cache as dc on p.id=dc.data_id "
     data = None
-    select = "SELECT id, name, thumbnail_url, thumbnail_filepath " \
-             "from playlist "
     if playlist_id:
         # only get data for a specific playlist
-        select += " WHERE id = %s"
+        select += " and p.id = %s"
         data = playlist_id,
 
-    select += " order by name"
+    select += " order by p.name"
     result = executeSQLFetchAll(select, data)
 
     # create Playlist objects from db tuples
     playlist_objs = [Playlist.from_db(r) for r in result]
+    for pl_obj in playlist_objs:
+        pl_obj.numSongs = getNumSongsInPlaylist(pl_obj.playlist_id)
 
     if convert_to_json:
         playlist_objs = [playlist.to_json() for playlist in playlist_objs]
@@ -190,22 +207,24 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     :param convert_to_json:
     :return:
     """
-    select = "SELECT s.id, s.name, alb.name, alb.id, s.length, s.explicit, s.is_local, sip.set_video_id " \
+    select = "SELECT s.id, s.name, alb.name, alb.id, alb.thumbnail_id, " \
+             "s.length, s.explicit, s.is_local, sip.set_video_id " \
              "FROM song as s, album as alb, songs_in_playlist as sip " \
              "WHERE s.album_id = alb.id " \
              "AND sip.playlist_id = %s " \
-             "AND sip.song_id = s.id"
+             "AND sip.song_id = s.id " \
+             "order by sip.datetime_added desc"
     data = playlist_id,
     result = executeSQLFetchAll(select, data)
     song_lst = []
     song_ids = set()
     for song in result:
-        s_obj = Song.from_db(song)
+        s_obj = Song.from_db(song, True)
         song_ids.add(s_obj.video_id)
         song_lst.append(s_obj)
 
     # find the artists for each song
-    select_artists = "SELECT a.id, a.name, ass.song_id " \
+    select_artists = "SELECT a.id, a.name, a.thumbnail_id, ass.song_id " \
                      "from artist as a, artist_songs as ass " \
                      "WHERE a.id = ass.artist_id " \
                      "and ass.song_id in %s"
@@ -213,9 +232,9 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     artists = executeSQLFetchAll(select_artists, data) if song_ids else []
     artist_song_dict = {}
     for artist in artists:
-        artist_id, artist_name, song_id = artist
-        new_a = Artist(artist_id, artist_name)
-        updateDictEntry(artist_song_dict, song_id, new_a)
+        song_id = artist[3]
+        artist_obj = Artist.from_db(artist[:3])
+        updateDictEntry(artist_song_dict, song_id, artist_obj)
 
     # set artists for each song
     for next_song in song_lst:

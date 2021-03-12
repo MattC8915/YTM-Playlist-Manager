@@ -1,7 +1,7 @@
 """Flask endpoints"""
 import json
 
-from flask import Flask, request
+from flask import Flask, request, send_file
 
 from cache.cache_service import getPlaylist, getAllPlaylists
 from db.ytm_db_service import deleteSongsFromPlaylistInDb
@@ -88,7 +88,7 @@ def getPlaylistEndpoint(playlist_id):
     return httpResponse(result)
 
 
-@app.route('/playlists', methods=["GET"])
+@app.route('/library', methods=["GET"])
 def getAllPlaylistsEndpoint():
     """
     This endpoint returns a list of all my playlists
@@ -97,6 +97,11 @@ def getAllPlaylistsEndpoint():
     ignore_cache = shouldIgnoreCache(request_args=request.args)
     result = getAllPlaylists(ignore_cache)
     return httpResponse(result)
+
+
+@app.route("/images/<image_name>", methods=["GET"])
+def get_image(image_name):
+    return send_file(filename_or_fp="./images/" + image_name, mimetype="image/png")
 
 
 def shouldIgnoreCache(request_args):
