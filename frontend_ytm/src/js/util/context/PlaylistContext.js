@@ -85,6 +85,7 @@ export function playlistReducer(existingPlaylists, action) {
         let albums = groupSongsByAlbum(playlist.songs)
         playlist.albumView = albums;
     }
+
     let removeSongsFunc = action.payload.removeSongs
     // reformat song objects - create strings for album, artist and playlist. And create render object for list of playlists
     if ([ADD_SONGS, SET_SONGS, REMOVE_SONGS].includes(action.type)) {
@@ -120,8 +121,6 @@ function reformatSongObjects(tracks, playlistId, removeSongsFunc) {
         track.thumbnail = track.album ? track.album.thumbnail : null;
 
         track.id = track.setVideoId;
-        // add an index, so we can preserve the original order of the songs
-        track.index = index;
 
 
         return track;

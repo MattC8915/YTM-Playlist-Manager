@@ -36,10 +36,8 @@ export default function Playlist(props) {
     let [lookedForDuplicates, setLookedForDuplicates] = useState(false);
     let [albumView, setAlbumView] = useState(false);
 
-    let [updatePlaylistMemo, setUpdatePlaylistMemo] = useState(false);
     let playlistId = props.playlistId
     let playlist = useMemo(() => {
-        console.log("use memo")
         return playlistContext.playlists.find((pl) => pl.playlistId === playlistId) || {title: "", songs: []}
     }, [playlistContext.playlists, playlistId])
 
@@ -79,7 +77,6 @@ export default function Playlist(props) {
 
                 // de-select all rows
                 setSelectedRowIds([])
-                setUpdatePlaylistMemo(!setUpdatePlaylistMemo)
             })
             .catch((resp) => {
                 fetchSongs(true)
@@ -97,9 +94,11 @@ export default function Playlist(props) {
         setIsDataLoading(true);
         sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
-                let tracks = resp.tracks
+                let tracks = resp.tracks.forEach((song, index) => {
+                    // add an index, so we can preserve the original order of the songs
+                    song.index = index;
+                })
                 playlistContext.setSongs(playlistId, tracks)
-                setUpdatePlaylistMemo(!setUpdatePlaylistMemo)
 
                 // if the user had filtered songs before refreshing: enforce the filter again
                 if (filteredIds) {
@@ -135,8 +134,6 @@ export default function Playlist(props) {
             setDuplicateSongs(dupes);
             setLookedForDuplicates(true);
         }
-        console.log("useeffect")
-        console.log(playlist.title + " " + playlist.count)
     }, [fetchSongs, fetchedSongs, lookedForDuplicates, playlist, playlistId])
 
     /**
@@ -175,7 +172,6 @@ export default function Playlist(props) {
         // set the state
         setFilteredRows(sortedFilterRows);
         playlistContext.setSongs(playlistId, sortedSongs);
-        setUpdatePlaylistMemo(!setUpdatePlaylistMemo)
     }
 
     // Define the columns in the for the playlist
@@ -379,6 +375,7 @@ export default function Playlist(props) {
         setFilteredRows(Array.from(filteredSet))
     }
 
+    // noinspection JSUnusedGlobalSymbols
     return (
         <div>
             {/* Page header with refresh and back buttons */}
@@ -399,7 +396,7 @@ export default function Playlist(props) {
                         )}
                         <Checkbox
                             checked={albumView}
-                            onChange={(e) => setAlbumView(!albumView)}>
+                            onChange={() => setAlbumView(!albumView)}>
                             <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
                                 Album View
                             </div>
@@ -492,9 +489,12 @@ export default function Playlist(props) {
                 loading={isDataLoading}
                 dataSource={filteredRows && filteredRows.length > 0 ? filteredRows : albumView ? playlist.albumView : playlist.songs}
                 onChange={tableSortChange}
-                pagination={{position: ["topRight", "bottomRight"], defaultPageSize: 100,
+                pagination={{
+                    position: ["topRight", "bottomRight"],
+                    defaultPageSize: 100,
                     pageSizeOptions: [100, 1000, 10000],
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}}
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
+                }
                 rowKey={"id"}
                 size={"small"}
             />
