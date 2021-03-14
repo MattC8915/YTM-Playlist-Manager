@@ -62,10 +62,10 @@ def updatePlaylists():
         time.sleep(60)
 
 
-def main():
+def updateData():
     updatePlaylists()
     downloadImages()
 
 
 if __name__ == '__main__':
-    main()
+    updateData()
