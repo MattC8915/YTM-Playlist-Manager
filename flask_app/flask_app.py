@@ -115,4 +115,4 @@ def shouldIgnoreCache(request_args):
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run("localhost", 5050)
