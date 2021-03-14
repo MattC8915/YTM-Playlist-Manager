@@ -95,7 +95,7 @@ class Thumbnail:
 
 
 class Playlist:
-    def __init__(self, plid, name, thumbnail, songs, last_updated):
+    def __init__(self, plid, name, thumbnail, songs, last_updated, num_songs=0):
         self.playlist_id = plid
         self.name = name
         self.thumbnail = thumbnail
@@ -105,8 +105,8 @@ class Playlist:
         else:
             delta = datetime.now() - last_updated
             delta_str = str(delta).split(".")[0]
-            self.last_updated = delta_str
-        self.numSongs = len(songs) if songs else 0
+            self.last_updated = delta_str + " ago"
+        self.num_songs = len(songs) if songs else num_songs
 
     def __str__(self):
         return f"{self.name} ({self.playlist_id})"
@@ -128,15 +128,16 @@ class Playlist:
         pl_id = playlist_json.get("playlistId", playlist_json.get("id"))
         name = playlist_json.get("title")
         tracks = playlist_json.get("tracks", [])
+        num_songs = playlist_json.get("count")
         return cls(plid=pl_id, name=name, thumbnail=thumbnail,
-                   songs=[Song.from_json(t, True) for t in tracks],
-                   last_updated=datetime.now())
+                   songs=[Song.from_json(track, True, index) for index, track in enumerate(tracks)],
+                   last_updated=datetime.now(), num_songs=num_songs)
 
     def to_json(self):
         return {"playlistId": self.playlist_id,
                 "title": self.name,
                 "lastUpdated": self.last_updated,
-                "numSongs": len(self.songs) if self.songs else self.numSongs,
+                "numSongs": len(self.songs) if self.songs else self.num_songs,
                 "tracks": [s.to_json() for s in self.songs],
                 "thumbnail": self.thumbnail.to_json()}
 
@@ -214,10 +215,12 @@ class SongInPlaylist:
 
 
 class Song:
-    def __init__(self, vid_id, title, artists, album, length, explicit, local, set_vid_id, include_playlists=False):
+    def __init__(self, vid_id, title, artists, album, length, explicit, local, set_vid_id, include_playlists=False,
+                 index=None):
         self.video_id = vid_id
         self.set_video_id = set_vid_id
         self.title = title
+        self.index = index
         self.artists: List[Artist] = artists
         self.album: Album = album
         self.duration = length
@@ -239,7 +242,7 @@ class Song:
         return f"{self.title} by {', '.join([str(a) for a in self.artists])} on {self.album}"
 
     def to_json(self):
-        return {"videoId": self.video_id, "setVideoId": self.set_video_id, "title": self.title,
+        return {"videoId": self.video_id, "setVideoId": self.set_video_id, "title": self.title, "index": self.index,
                 "album": self.album.to_json(),
                 "artists": [a.to_json() for a in self.artists],
                 "playlists": [sip.to_json() for sip in self.playlists],
@@ -247,25 +250,25 @@ class Song:
 
     @classmethod
     def from_db(cls, db_tuple, include_playlists=False):
-        video_id, title, album_name, album_id, thumbnail_id, length, explicit, is_local, set_video_id = db_tuple
+        video_id, title, album_name, album_id, thumbnail_id, length, explicit, is_local, set_video_id, index = db_tuple
         thumbnail = cs.getThumbnail(thumbnail_id, size=60)
         album = Album(album_id, album_name, thumbnail)
         return cls(vid_id=video_id, title=title, artists=[], album=album, length=length, explicit=explicit,
-                   local=is_local, set_vid_id=set_video_id, include_playlists=include_playlists)
+                   local=is_local, set_vid_id=set_video_id, include_playlists=include_playlists, index=index)
 
     @classmethod
-    def from_json(cls, song_json: dict, include_playlists=False):
+    def from_json(cls, song_json: dict, include_playlists=False, index=None):
         vid_id = song_json.get("videoId")
         set_vid_id = song_json.get("setVideoId")
         title = song_json.get("title")
-        artists = [Artist.from_json(a) for a in song_json["artists"]]
+        artists = [Artist.from_json(a) for a in song_json.get("artists", [])]
         length = song_json.get("duration")
         explicit = song_json.get("is_explicit", False)
         is_local = song_json.get("is_local", False)
         thumbnail: Thumbnail = Thumbnail.from_json(song_json, size=60)
         album = Album.from_json(song_json["album"], thumbnail)
         return cls(vid_id=vid_id, title=title, artists=artists, album=album, length=length, explicit=explicit,
-                   local=is_local, set_vid_id=set_vid_id, include_playlists=include_playlists)
+                   local=is_local, set_vid_id=set_vid_id, include_playlists=include_playlists, index=index)
 
     def to_db(self):
         tup = (self.video_id, self.title, self.album.album_id, self.duration, self.explicit, self.local)

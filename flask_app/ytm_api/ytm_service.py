@@ -77,13 +77,15 @@ def addSongsToPlaylist(playlist_id, song_ids):
     songs_already_in_playlist = song_id_set.intersection(all_playlist_song_ids)
 
     if songs_not_in_playlist:
+        new_song_list = [s for s in song_ids if s in songs_not_in_playlist]
         # add all the songs that are NOT in the playlist
-        resp = getYTMClient().add_playlist_items(playlist_id, list(songs_not_in_playlist))
-        updateSongIdListsFromResponse(songs_not_in_playlist, resp, success_ids, already_there_ids, failure_ids)
+        resp = getYTMClient().add_playlist_items(playlist_id, new_song_list)
+        updateSongIdListsFromResponse(new_song_list, resp, success_ids, already_there_ids, failure_ids)
 
     # add the songs that MIGHT BE in the playlist one by one
     # (because YTM will fail if ONE of the given songs is already in the playlist)
-    for dupe in songs_already_in_playlist:
+    dupe_list = [s for s in song_ids if s in songs_already_in_playlist]
+    for dupe in dupe_list:
         resp = getYTMClient().add_playlist_items(playlist_id, [dupe])
         updateSongIdListsFromResponse([dupe], resp, success_ids, already_there_ids, failure_ids)
     return success_ids, already_there_ids, failure_ids

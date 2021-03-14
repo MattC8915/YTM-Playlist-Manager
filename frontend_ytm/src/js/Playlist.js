@@ -12,9 +12,9 @@ import {useStateWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {useNavigate} from "@reach/router";
 import {MyToastContext} from "./util/context/MyToastContext";
 import {ERROR_TOAST, SUCCESS_TOAST} from "./App";
-import {MinusSquareOutlined, SyncOutlined} from "@ant-design/icons";
+import {SyncOutlined} from "@ant-design/icons";
 import debounce from "lodash/debounce" ;
-import {PlaylistContext} from "./util/context/PlaylistContext";
+import {groupSongsByAlbum, PlaylistContext} from "./util/context/PlaylistContext";
 import Thumbnail from "./Thumbnail";
 import Checkbox from "antd/lib/checkbox/Checkbox";
 
@@ -30,27 +30,87 @@ export default function Playlist(props) {
     let sendRequest = useHttp();
     let [selectedRowIds, setSelectedRowIds] = useState([]);
     let [selectedPlaylist, setSelectedPlaylist] = useState([]);
-    let [filteredRows, setFilteredRows] = useState([]);
     let [isDataLoading, setIsDataLoading] = useState(false);
-    let [duplicateSongs, setDuplicateSongs] = useState(false);
-    let [lookedForDuplicates, setLookedForDuplicates] = useState(false);
     let [albumView, setAlbumView] = useState(false);
+    let [filterSingles, setFilterSingles] = useState(true);
 
     let playlistId = props.playlistId
-    let playlist = useMemo(() => {
-        return playlistContext.playlists.find((pl) => pl.playlistId === playlistId) || {title: "", songs: []}
-    }, [playlistContext.playlists, playlistId])
 
+    let [searchFilter, setSearchFilter] = useState("")
     let [showPlaylistOptions, setShowPlaylistOptions] = useState(false);
     let [filteringByDupes, setFilteringByDupes] = useState(false);
     let nav = useNavigate();
 
+    let playlist = useMemo(() => {
+        return playlistContext.playlists.find((pl) => pl.playlistId === playlistId) || {title: "", songs: []}
+    }, [playlistContext.playlists, playlistId])
+
+    /**
+     * Memo-ized list of filtered songs. This value will be recomputerd any time the search filter changes or the
+     * underlying playlist.songs changes
+     */
+    let filteredSongs = useMemo(() => {
+        let songs = playlist.songs
+        // only include duplicate songs
+        if (filteringByDupes) {
+            songs = songs.filter((song) => song.is_dupe)
+        }
+        // filter songs by each search filter
+        if (searchFilter) {
+            let filteredSet = new Set();
+            let values = searchFilter.split("|")
+            values.forEach((value) => {
+                value = value.toLowerCase().trim();
+                if (value && value.trim()) {
+                    let filtered = songs.filter((song) => {
+                        return song.title.toString().toLowerCase().includes(value) ||
+                            song.artistsString.toString().toLowerCase().includes(value) ||
+                            song.albumString.toString().toLowerCase().includes(value) ||
+                            song.playlistsString.toString().toLowerCase().includes(value)
+                    });
+                    filtered.forEach((s) => filteredSet.add(s))
+                }
+            });
+            songs = Array.from(filteredSet)
+        }
+
+        if (albumView) {
+            // noinspection UnnecessaryLocalVariableJS
+            let albums = groupSongsByAlbum(songs)
+            if (filterSingles) {
+                albums = albums.filter((album) => album.children.length > 1)
+            }
+            return albums;
+        } else {
+            return songs
+        }
+    }, [albumView, filterSingles, filteringByDupes, playlist.songs, searchFilter])
+
+    let duplicateSongs = useMemo(() => {
+        // search for duplicates in the list of songs
+        let dupes = playlist.songs.filter((song) => song.is_dupe)
+        if (dupes.length === 0) {
+            setFilteringByDupes(false);
+        }
+        return dupes;
+    }, [playlist.songs])
     /**
      * Returns the song objects that are currently selected
      */
-    const getSelectedSongs = useCallback(() => {
-        let songs =  playlist.songs.filter((song) => selectedRowIds.includes(song.id))
-        if (albumView) {
+    const getSelectedSongs = useCallback((includeAlbums, preserveOrder) => {
+        let songs;
+        if (preserveOrder) {
+            // create a list of songs that is in the same order as the list of selected song ids
+            // (so when I'm adding songs to a playlist they get added in the order I selected them)
+            songs = selectedRowIds
+                .map((selectedId) => playlist.songs.find((song) => song.id === selectedId))
+                .filter((sid) => sid)
+        }
+        else {
+            // create list without worrying about the order (it will be in the same order as playlist.songs)
+            songs =  playlist.songs.filter((song) => selectedRowIds.includes(song.id))
+        }
+        if (albumView && includeAlbums) {
             let albums = playlist.albumView.filter((album) => selectedRowIds.includes(album.id))
             songs.push(...albums)
         }
@@ -62,19 +122,9 @@ export default function Playlist(props) {
      * Removes the currently selected songs from this playlist
      */
     function removeSelectedRows() {
-        let selectedSongs = getSelectedSongs()
-        if (albumView) {
-            // filter out the albums
-            selectedSongs = selectedSongs.filter((row) => row.setVideoId)
-        }
+        let selectedSongs = getSelectedSongs(false, false)
         playlistContext.removeSongs(playlistId, selectedSongs)
-            .then((resp) => {
-                // remove the selected songs from the currently filtered rows (if rows are filtered)
-                let newFilteredRows = filteredRows.filter((s) => {
-                    return !selectedRowIds.includes(s.setVideoId);
-                })
-                setFilteredRows(newFilteredRows)
-
+            .then(() => {
                 // de-select all rows
                 setSelectedRowIds([])
             })
@@ -88,28 +138,24 @@ export default function Playlist(props) {
      * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
      */
     const fetchSongs = useCallback((forceRefresh) => {
-        // save the ids of the filtered rows and the selected rows, so they can be filtered/selected again after retrieving data
-        let filteredIds = filteredRows.map((song) => song.videoId)
-        let selectedIds = getSelectedSongs()
+        // save the ids of the selected rows, so they can be selected again after retrieving data
+        let selectedIds = getSelectedSongs(true, false)
         setIsDataLoading(true);
         sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
-                let tracks = resp.tracks.forEach((song, index) => {
+                let songs = resp.tracks
+                songs.forEach((song, index) => {
                     // add an index, so we can preserve the original order of the songs
                     song.index = index;
                 })
-                playlistContext.setSongs(playlistId, tracks)
+                playlistContext.setSongs(playlistId, songs)
 
-                // if the user had filtered songs before refreshing: enforce the filter again
-                if (filteredIds) {
-                    // TODO fix me
-                    let newFilteredRows = tracks.filter((song) => filteredIds.includes(song.videoId))
-                    setFilteredRows(newFilteredRows);
-                }
                 // if the user had selected songs before refreshing: select those songs again
                 if (selectedIds) {
                     // TODO fix me
-                    let newSelectedRowIds = tracks.filter((song) => filteredIds.includes(song.videoId)).map((song) => song.id)
+                    let newSelectedRowIds = songs
+                        .filter((song) => selectedIds.includes(song.id))
+                        .map((song) => song.id)
                     setSelectedRowIds(newSelectedRowIds);
                 }
                 setIsDataLoading(false);
@@ -120,21 +166,15 @@ export default function Playlist(props) {
                 setIsDataLoading(false);
                 toastContext.addToast("Error loading data", ERROR_TOAST)
             })
-    }, [filteredRows, getSelectedSongs, playlistContext, playlistId, sendRequest, toastContext])
+    }, [getSelectedSongs, playlistContext, playlistId, sendRequest, toastContext])
 
     useEffect(() => {
         if (playlistId && !songsExist(playlist) && !fetchedSongs) {
             // fetch song data from backend if not done already
             setFetchedSongs(true);
-            setLookedForDuplicates(false);
             fetchSongs();
-        } else if (songsExist(playlist) && !lookedForDuplicates) {
-            // search for duplicates in the list of songs
-            let dupes = playlist.songs.filter((song) => song.is_dupe)
-            setDuplicateSongs(dupes);
-            setLookedForDuplicates(true);
         }
-    }, [fetchSongs, fetchedSongs, lookedForDuplicates, playlist, playlistId])
+    }, [fetchSongs, fetchedSongs, playlist, playlistId])
 
     /**
      * Called when the user clicks on one of the table headers. This sorts all songs based on the header that was clicked
@@ -166,11 +206,9 @@ export default function Playlist(props) {
         }
 
         // do the sorting
-        let sortedFilterRows = filteredRows.sort(sortFunction)
         let sortedSongs = playlist.songs.sort(sortFunction)
 
         // set the state
-        setFilteredRows(sortedFilterRows);
         playlistContext.setSongs(playlistId, sortedSongs);
     }
 
@@ -253,10 +291,9 @@ export default function Playlist(props) {
         responseToastData.forEach((data) => {
             // find the song names that are in this list
             if (resp[data.key]) {
-                let songStr = getSelectedSongs()
-                    .filter((song) => resp[data.key].includes(song.videoId))
+                let songStr = getSelectedSongs(false, false)
                     .map((song) => song.title)
-                    .join(" | ");
+                    .join(" || ");
                 if (songStr) {
                     toastCreated = true;
                     // determine the color of the toast
@@ -278,14 +315,11 @@ export default function Playlist(props) {
          * Send request to server to add the currently selected songs to the selected playlist
          * @type {*[]}
          */
-        let selectedIds = getSelectedSongs().map((song) => song.videoId)
-            // remove null values
-            // .filter((row) => row)
-
+        let selectedSongs = getSelectedSongs(false, true).map((song) => song.videoId)
         let options = {
             method: "PUT",
             body: {
-                songs: selectedIds,
+                songs: selectedSongs,
                 playlist: selectedPlaylist.playlistId
             }
         }
@@ -303,19 +337,6 @@ export default function Playlist(props) {
             })
     }
 
-    /**
-     * Toggle whether to only show songs in the playlist that are duplicated
-     */
-    function filterDupes() {
-        if (!filteringByDupes) {
-            let filteredSongIds = playlist.songs.filter((song) => song.is_dupe).map((song) => song.videoId)
-            let filteredSongs = playlist.songs.filter((song) => filteredSongIds.includes(song.videoId))
-            setFilteredRows(filteredSongs);
-        } else {
-            setFilteredRows([])
-        }
-        setFilteringByDupes(!filteringByDupes)
-    }
 
     // Modal containing playlists that songs can be added to
     const popoverContent = (
@@ -345,35 +366,11 @@ export default function Playlist(props) {
             />
         </div>
     )
-
-    const onSearchInputChange = (event) => {
-        let value = event.target.value;
-        filterRows(value)
+    const onSearchInputChange = (value) => {
+        setSearchFilter(value)
     }
-    const debounceOnChange = debounce((e) => onSearchInputChange(e), 200)
 
-    /**
-     * Searches for the user-inputted text in the title, artist and album of every song.
-     * If the '|' character is in the search string it is treated as an OR argument
-     * @param input - the text the user searched for
-     */
-    const filterRows = (input) => {
-        let values = input.split("|")
-        let filteredSet = new Set();
-        values.forEach((value) => {
-            value = value.toLowerCase();
-            if (value && value.trim()) {
-                let filteredRows = playlist.songs.filter((song) => {
-                    return song.title.toString().toLowerCase().includes(value) ||
-                        song.artistsString.toString().toLowerCase().includes(value) ||
-                        song.albumString.toString().toLowerCase().includes(value) ||
-                        song.playlistsString.toString().toLowerCase().includes(value)
-                });
-                filteredRows.forEach((row) => filteredSet.add(row))
-            }
-        });
-        setFilteredRows(Array.from(filteredSet))
-    }
+    const debounceOnChange = debounce((e) => onSearchInputChange(e.target.value), 200)
 
     // noinspection JSUnusedGlobalSymbols
     return (
@@ -390,10 +387,15 @@ export default function Playlist(props) {
                         </Button>
                         {" "}
                         {(duplicateSongs && duplicateSongs.length > 0) && (
-                            <Button onClick={filterDupes}>
+                            <Button onClick={() => setFilteringByDupes(!filteringByDupes)}>
                                 <Badge count={`Dupes found (${duplicateSongs.length})`}/>
                             </Button>
                         )}
+                        <Button type={"primary"}
+                            style={{marginLeft: "50px"}}
+                            onClick={() => setSelectedRowIds([])}>
+                            De-select All
+                        </Button>
                         <Checkbox
                             checked={albumView}
                             onChange={() => setAlbumView(!albumView)}>
@@ -401,6 +403,15 @@ export default function Playlist(props) {
                                 Album View
                             </div>
                         </Checkbox>
+                        {albumView && (
+                            <Checkbox
+                                checked={filterSingles}
+                                onChange={() => setFilterSingles(!filterSingles)}>
+                                <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
+                                    Filter Singles
+                                </div>
+                            </Checkbox>
+                        )}
                     </div>
                 )}
             />
@@ -434,9 +445,9 @@ export default function Playlist(props) {
                 {/*Search songs in playlist*/}
                 <Input.Search
                     style={{margin: "0 0 10px 0"}}
-                    placeholder={"Search stuff"}
+                    placeholder={"album | artist"}
                     enterButton
-                    onSearch={filterRows}
+                    onSearch={onSearchInputChange}
                     onChange={debounceOnChange}
                     allowClear
                 />
@@ -466,7 +477,8 @@ export default function Playlist(props) {
                         }
 
                         // if I just deselected an album - deselect all its songs
-                        let removedAlbums = getSelectedSongs().filter((row) => !row.setVideoId && !newSelectedRowIds.includes(row.id))
+                        let removedAlbums = getSelectedSongs(true, false)
+                            .filter((row) => !row.setVideoId && !newSelectedRowIds.includes(row.id))
                         if (removedAlbums && removedAlbums.length > 0) {
                             console.log("removed albums")
                             let removedChildren = []
@@ -487,7 +499,8 @@ export default function Playlist(props) {
                 sticky={{offsetHeader: 50+66+24}}
                 columns={columns}
                 loading={isDataLoading}
-                dataSource={filteredRows && filteredRows.length > 0 ? filteredRows : albumView ? playlist.albumView : playlist.songs}
+                // dataSource={albumView ? playlist.albumView : playlist.songs}
+                dataSource={filteredSongs}
                 onChange={tableSortChange}
                 pagination={{
                     position: ["topRight", "bottomRight"],

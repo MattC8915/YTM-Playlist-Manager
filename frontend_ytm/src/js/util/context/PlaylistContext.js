@@ -14,6 +14,41 @@ export const SET_SONGS = "SET_SONGS"
 export const ADD_SONGS = "ADD_SONGS"
 export const REMOVE_SONGS = "REMOVE_SONGS"
 
+
+export function groupSongsByAlbum(songs) {
+    // TODO next this is broken when an album is null (godfather of harlem includes other loosies)
+    let uniqueAlbumIds = [];
+    let uniqueAlbums = [];
+    songs.forEach((song) => {
+        if (!uniqueAlbumIds.includes(song.album.id)) {
+            uniqueAlbums.push(song.album)
+            uniqueAlbumIds.push(song.album.id)
+        }
+    })
+
+    return uniqueAlbums.map((nextAlbum) => {
+        let album = cloneDeep(nextAlbum);
+        let songsInAlbum = songs.filter((song) => song.album.id === album.id)
+        let artistCount = {}
+        songsInAlbum.forEach((song) => {
+            increaseArtistCount(song.artists, artistCount)
+        })
+        // determine the artists
+        album.artistsString = Object.entries(artistCount)
+            .sort(([a1, count1], [a2, count2]) => count1 > count2 ? -1 : 1)
+            .map(([artist, count]) => artist)
+            .join(", ");
+        if (album.artistsString.length > 100) {
+            album.artistsString = album.artistsString.substring(0, 100) + "..."
+        }
+        album.albumString = album.name;
+        album.children = songsInAlbum;
+        album.thumbnail = songsInAlbum[0].thumbnail;
+        album.duration = songsInAlbum.length;
+        return album;
+    });
+}
+
 /**
  * Reducer function for playlist state management
  * @param existingPlaylists - the old state
@@ -30,7 +65,6 @@ export function playlistReducer(existingPlaylists, action) {
     if (!playlist) {
         playlist = {playlistId: action.payload.playlistId}
         playlistsCopy.push(playlist)
-        playlist.count = 0
     }
     switch (action.type) {
         case SET_PLAYLISTS:
@@ -40,7 +74,6 @@ export function playlistReducer(existingPlaylists, action) {
                 if (!songsExist(playlist)){
                     playlist.songs = thisExistingPlaylist && thisExistingPlaylist.songs ? thisExistingPlaylist.songs : []
                 }
-                playlist.count = 0;
                 return playlist
             });
             playlistsCopy = payloadPlaylists;
@@ -51,18 +84,33 @@ export function playlistReducer(existingPlaylists, action) {
             playlist.numSongs = playlist.songs.length;
             break;
         case ADD_SONGS:
+            // TODO adding and removing songs would be simpler if I had a master list of all song objects
+            //  (including setVideoIds for each playlist) and each playlist had a list of song ids
             // add to the list of songs for this playlist
             playlist.songs.push(...payloadSongs)
             playlist.numSongs = playlist.songs.length;
+            // let videoIdsAdded = payloadSongs.map((song) => song.videoId)
+            // update these song objects in all other playlists
+            // playlistsCopy.forEach((nextPlaylist) => {
+            //     if (nextPlaylist.playlistId !== playlist.playlistId) {
+            //         nextPlaylist.songs.map((nextSong) => {
+            //             if (videoIdsAdded.includes(nextSong.videoId)) {
+            //                 // TODO need to get the setVideoId for this song in 'playlist'
+            //                 // nextSong.playlists.push(playlist)
+            //             }
+            //             return nextSong;
+            //         })
+            //     }
+            // })
             break;
         case REMOVE_SONGS:
             let setVideoIds = payloadSongs.map((song) => song.setVideoId)
             let videoIds = payloadSongs.map((song) => song.videoId)
             // remove the songs from THIS playlist
             playlist.songs = playlist.songs.filter((song) => !setVideoIds.includes(song.setVideoId))
-            // update THIS song object in all other playlists
-            playlistsCopy = playlistsCopy.map((nextPlaylist) => {
-                nextPlaylist.songs = nextPlaylist.songs.map((nextSong) => {
+            // update these song objects in all other playlists
+            playlistsCopy.forEach((nextPlaylist) => {
+                nextPlaylist.songs.forEach((nextSong) => {
                     if (videoIds.includes(nextSong.videoId)) {
                         nextSong.playlists = nextSong.playlists.filter((sip) => {
                             return !setVideoIds.includes(sip.setVideoId)
@@ -71,9 +119,7 @@ export function playlistReducer(existingPlaylists, action) {
                             return !setVideoIds.includes(plRender.key)
                         })
                     }
-                    return nextSong;
                 })
-                return nextPlaylist;
             })
             break;
 
@@ -91,7 +137,6 @@ export function playlistReducer(existingPlaylists, action) {
     if ([ADD_SONGS, SET_SONGS, REMOVE_SONGS].includes(action.type)) {
         playlist.songs = reformatSongObjects(playlist.songs, playlistId, removeSongsFunc)
     }
-    playlist.count += 1
     return playlistsCopy;
 }
 
@@ -128,38 +173,6 @@ function reformatSongObjects(tracks, playlistId, removeSongsFunc) {
 }
 
 
-function groupSongsByAlbum(songs) {
-    let uniqueAlbumIds = [];
-    let uniqueAlbums = [];
-    songs.forEach((song) => {
-        if (!uniqueAlbumIds.includes(song.album.id)) {
-            uniqueAlbums.push(song.album)
-            uniqueAlbumIds.push(song.album.id)
-        }
-    })
-
-    return uniqueAlbums.map((nextAlbum) => {
-        let album = cloneDeep(nextAlbum);
-        let songsInAlbum = songs.filter((song) => song.album.id === album.id)
-        let artistCount = {}
-        songsInAlbum.forEach((song) => {
-            increaseArtistCount(song.artists, artistCount)
-        })
-        // determine the artists
-        album.artistsString = Object.entries(artistCount)
-            .sort(([a1, count1], [a2, count2]) => count1 > count2 ? -1 : 1)
-            .map(([artist, count]) => artist)
-            .join(", ");
-        if (album.artistsString.length > 100) {
-            album.artistsString = album.artistsString.substring(0, 100) + "..."
-        }
-        album.albumString = album.name;
-        album.children = songsInAlbum;
-        album.thumbnail = songsInAlbum[0].thumbnail;
-        album.duration = songsInAlbum.length;
-        return album;
-    });
-}
 
 function increaseArtistCount(artists, countObj) {
     artists.forEach((artist) => {

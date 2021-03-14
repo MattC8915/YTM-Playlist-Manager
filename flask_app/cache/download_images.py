@@ -56,7 +56,9 @@ def updatePlaylists():
     results = executeSQLFetchAll(select, None)
     for r in results:
         playlist_id = r[0]
-        getPlaylist(playlist_id, ignore_cache=True)
+        if playlist_id == "LM":
+            continue
+        p = getPlaylist(playlist_id, ignore_cache=False)
         time.sleep(60)
 
 

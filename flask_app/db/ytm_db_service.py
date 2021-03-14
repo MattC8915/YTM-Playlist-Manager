@@ -52,10 +52,14 @@ def persistAllSongData(songs_to_add, playlist_id):
         executeSQL(insert_song, song_data)
 
         # persist the song/playlist relationship
-        insert_song_playlist = "INSERT INTO songs_in_playlist (playlist_id, song_id, set_video_id, datetime_added) " \
-                               "VALUES (%s, %s, %s, %s)"
-        isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added
-        executeSQL(insert_song_playlist, isp_data)
+        insert_song_playlist = "INSERT INTO songs_in_playlist " \
+                               "(playlist_id, song_id, set_video_id, datetime_added, index) " \
+                               "VALUES (%s, %s, %s, %s, %s)"
+        isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
+        try:
+            executeSQL(insert_song_playlist, isp_data)
+        except Exception as e:
+            print(e)
 
         # persist the song/artist relationships
         insert_song_artist = "INSERT INTO artist_songs (song_id, artist_id) VALUES (%s, %s) " \
@@ -93,12 +97,14 @@ def persistPlaylistSongs(playlist_id, new_songs):
     :param new_songs:
     :return:
     """
+    # TODO if the sorting for the playlist changes: the index in the sip table will get fucked upt
+
     # create Song objects for songs I just got from YTM
     if len(new_songs) > 0 and isinstance(new_songs[0], dict):
-        new_songs = [Song.from_json(s, False) for s in new_songs]
+        raise Exception("this shouldn't happen")
+        # new_songs = [Song.from_json(s, False) for s in new_songs]
     # get Song objects for existing songs in the database
     existing_songs = getPlaylistSongsFromDb(playlist_id)
-
     # get ids for new and existing songs
     existing_song_ids = {s.set_video_id for s in existing_songs}
     new_song_ids = {s.set_video_id for s in new_songs}
@@ -191,7 +197,7 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     # create Playlist objects from db tuples
     playlist_objs = [Playlist.from_db(r) for r in result]
     for pl_obj in playlist_objs:
-        pl_obj.numSongs = getNumSongsInPlaylist(pl_obj.playlist_id)
+        pl_obj.num_songs = getNumSongsInPlaylist(pl_obj.playlist_id)
 
     if convert_to_json:
         playlist_objs = [playlist.to_json() for playlist in playlist_objs]
@@ -208,12 +214,12 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     :return:
     """
     select = "SELECT s.id, s.name, alb.name, alb.id, alb.thumbnail_id, " \
-             "s.length, s.explicit, s.is_local, sip.set_video_id " \
+             "s.length, s.explicit, s.is_local, sip.set_video_id, sip.index " \
              "FROM song as s, album as alb, songs_in_playlist as sip " \
              "WHERE s.album_id = alb.id " \
              "AND sip.playlist_id = %s " \
              "AND sip.song_id = s.id " \
-             "order by sip.datetime_added desc"
+             "order by sip.index"
     data = playlist_id,
     result = executeSQLFetchAll(select, data)
     song_lst = []

@@ -90,6 +90,9 @@ function App() {
      * Each songObject must have a videoId and setVideoId property
      */
     const removeSongsFromPlaylist = useCallback((playlistId, songObjects) => {
+        songObjects = songObjects.map((song) => {
+            return {"videoId": song.videoId, "setVideoId": song.setVideoId}
+        })
         let options = {
             method: "PUT",
             body: {

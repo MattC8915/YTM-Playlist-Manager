@@ -87,7 +87,10 @@ class CachedData:
         :param ignore_cache:
         :return:
         """
-        if ignore_cache or not self.shouldUseCache(data_id):
+        use_api = ignore_cache or not self.shouldUseCache(data_id)
+        if not self.data_type == DataType.THUMBNAIL:
+            print(f"Getting data for [{self.data_type.value}: {data_id}] from [{'YTM' if use_api else 'DB'}]")
+        if use_api:
             data = self.getDataFromYTMWrapper(data_id, extra_data)
         else:
             data = self.getDataFromDb(data_id, extra_data)
@@ -147,7 +150,7 @@ class CachedLibrary(CachedData):
         playlist_objs = [dm.Playlist.from_json(pl) for pl in playlist_list]
         persistAllPlaylists(playlist_objs)
         for pl_obj in playlist_objs:
-            pl_obj.numSongs = getNumSongsInPlaylist(pl_obj.playlist_id)
+            pl_obj.num_songs = getNumSongsInPlaylist(pl_obj.playlist_id)
         return [pl.to_json() for pl in playlist_objs]
 
 
