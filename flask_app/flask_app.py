@@ -4,8 +4,8 @@ import json
 from flask import Flask, request, send_file
 
 from cache import cache_service as cs
-from db.ytm_db_service import deleteSongsFromPlaylistInDb
-from ytm_api.ytm_service import addSongsToPlaylist, removeSongsFromPlaylist, isSuccessFromYTM
+from db import ytm_db_service
+from ytm_api import ytm_service
 
 app = Flask(__name__)
 
@@ -51,7 +51,7 @@ def addSongsToPlaylistEndpoint():
     request_body = request.json
     playlist_id = request_body["playlist"]
     songs = request_body["songs"]
-    success_ids, already_there_ids, failure_ids = addSongsToPlaylist(playlist_id, songs)
+    success_ids, already_there_ids, failure_ids = ytm_service.addSongsToPlaylist(playlist_id, songs)
     if success_ids:
         # if some songs succeeded: get updated data for this playlist from YTM
         cs.getPlaylist(playlist_id, ignore_cache=True)
@@ -69,9 +69,9 @@ def removeSongsFromPlaylistEndpoint():
     request_body = request.json
     playlist_id = request_body["playlist"]
     songs = request_body["songs"]
-    resp = removeSongsFromPlaylist(playlist_id, songs)
-    if isSuccessFromYTM(resp):
-        deleteSongsFromPlaylistInDb(playlist_id, [s["setVideoId"] for s in songs])
+    resp = ytm_service.removeSongsFromPlaylist(playlist_id, songs)
+    if ytm_service.isSuccessFromYTM(resp):
+        ytm_db_service.deleteSongsFromPlaylistInDb(playlist_id, [s["setVideoId"] for s in songs])
         return successResponse("success")
     return errorResponse("error")
 
