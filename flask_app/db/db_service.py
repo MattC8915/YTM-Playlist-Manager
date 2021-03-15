@@ -13,7 +13,7 @@ def initializeDbConnectionPool():
     :return:
     """
     global db_conn_pool
-    db_conn_pool = ThreadedConnectionPool(5, 100, host="localhost", port=5432, dbname="ytm", user="postgres",
+    db_conn_pool = ThreadedConnectionPool(5, 100, host="nuc", port=5432, dbname="ytm", user="postgres",
                                           password="newpass")
 
 
