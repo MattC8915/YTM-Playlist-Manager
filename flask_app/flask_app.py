@@ -3,7 +3,7 @@ import json
 
 from flask import Flask, request, send_file
 
-from cache.cache_service import getPlaylist, getAllPlaylists
+from cache import cache_service as cs
 from db.ytm_db_service import deleteSongsFromPlaylistInDb
 from ytm_api.ytm_service import addSongsToPlaylist, removeSongsFromPlaylist, isSuccessFromYTM
 
@@ -54,7 +54,7 @@ def addSongsToPlaylistEndpoint():
     success_ids, already_there_ids, failure_ids = addSongsToPlaylist(playlist_id, songs)
     if success_ids:
         # if some songs succeeded: get updated data for this playlist from YTM
-        getPlaylist(playlist_id, ignore_cache=True)
+        cs.getPlaylist(playlist_id, ignore_cache=True)
     if not already_there_ids and not failure_ids:
         return httpResponse({"success": success_ids})
     return httpResponse({"failed": failure_ids, "already_there": already_there_ids, "success": success_ids}, 500)
@@ -84,7 +84,7 @@ def getPlaylistEndpoint(playlist_id):
     :return:
     """
     ignore_cache = shouldIgnoreCache(request_args=request.args)
-    result = getPlaylist(playlist_id, ignore_cache)
+    result = cs.getPlaylist(playlist_id, ignore_cache)
     return httpResponse(result)
 
 
@@ -95,7 +95,7 @@ def getAllPlaylistsEndpoint():
     :return:
     """
     ignore_cache = shouldIgnoreCache(request_args=request.args)
-    result = getAllPlaylists(ignore_cache)
+    result = cs.getAllPlaylists(ignore_cache)
     return httpResponse(result)
 
 

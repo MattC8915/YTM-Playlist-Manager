@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from db import data_models as dm
-from db.db_service import executeSQLFetchOne, executeSQL, executeSQLFetchAll
+from db.db_service import executeSQLFetchOne, executeSQL
 from db.ytm_db_service import getPlaylistsFromDb, persistAllPlaylists, getPlaylistSongsFromDb, persistPlaylistSongs, \
     getNumSongsInPlaylist
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
