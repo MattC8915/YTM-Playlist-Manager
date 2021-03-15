@@ -2,9 +2,8 @@
 from datetime import datetime
 from typing import List
 
-from cache import cache_service
-from flask_app.db.data_models import Song, Playlist, Artist, Thumbnail
-from flask_app.db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
+from db.data_models import Song, Playlist, Artist, Thumbnail
+from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 
 
 def getArtistId(name):

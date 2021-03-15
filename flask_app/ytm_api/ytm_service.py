@@ -1,6 +1,6 @@
 """Contains code that interacts with the Youtube Music API"""
-from flask_app.db.ytm_db_service import getPlaylistSongsFromDb
-from flask_app.ytm_api.ytm_client import getYTMClient
+from db.ytm_db_service import getPlaylistSongsFromDb
+from ytm_api.ytm_client import getYTMClient
 
 
 def isSuccessFromYTM(resp):
