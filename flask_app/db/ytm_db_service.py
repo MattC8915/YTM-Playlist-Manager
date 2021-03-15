@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import List
 
-from db.data_models import Song, Playlist, Artist, Thumbnail
+from db import data_models as dm
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 
 
@@ -136,7 +136,7 @@ def updateDictEntry(the_dict, key, new_val):
         the_dict[key] = list_value
 
 
-def persistThumbnail(thumbnail: Thumbnail):
+def persistThumbnail(thumbnail):
     insert = "INSERT INTO thumbnail (id) VALUES (%s) " \
              "ON CONFLICT ON CONSTRAINT thumbnail_pkey DO NOTHING "
     data = thumbnail.thumbnail_id,
@@ -152,7 +152,7 @@ def persistThumbnail(thumbnail: Thumbnail):
     executeSQL(insert_dl, data)
 
 
-def persistAllPlaylists(playlist_list: List[Playlist]):
+def persistAllPlaylists(playlist_list):
     """
     Persist all playlist metadata to the db
     :param playlist_list:
@@ -194,7 +194,7 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     result = executeSQLFetchAll(select, data)
 
     # create Playlist objects from db tuples
-    playlist_objs = [Playlist.from_db(r) for r in result]
+    playlist_objs = [dm.Playlist.from_db(r) for r in result]
     for pl_obj in playlist_objs:
         pl_obj.num_songs = getNumSongsInPlaylist(pl_obj.playlist_id)
 
@@ -224,7 +224,7 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     song_lst = []
     song_ids = set()
     for song in result:
-        s_obj = Song.from_db(song, True)
+        s_obj = dm.Song.from_db(song, True)
         song_ids.add(s_obj.video_id)
         song_lst.append(s_obj)
 
@@ -238,7 +238,7 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     artist_song_dict = {}
     for artist in artists:
         song_id = artist[3]
-        artist_obj = Artist.from_db(artist[:3])
+        artist_obj = dm.Artist.from_db(artist[:3])
         updateDictEntry(artist_song_dict, song_id, artist_obj)
 
     # set artists for each song

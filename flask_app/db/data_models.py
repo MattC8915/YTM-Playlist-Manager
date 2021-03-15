@@ -2,8 +2,7 @@
 import random
 import re
 import string
-from datetime import datetime, timedelta
-from time import strftime
+from datetime import datetime
 from typing import List
 from urllib.parse import urlparse
 
