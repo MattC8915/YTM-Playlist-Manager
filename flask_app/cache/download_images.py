@@ -23,7 +23,9 @@ def downloadImages():
     data = False,
     results = executeSQLFetchAll(select, data)
     filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/images/")
-    for r in results:
+    logMessage(f"Downloading {len(results)} images")
+    for index, r in enumerate(results):
+        logMessage(f"Getting image #{index}")
         thumbnail = Thumbnail.from_db(r)
         parsed_path = urlparse(thumbnail.url).path
         filename_from_url = binascii.hexlify(parsed_path.encode()).decode()
