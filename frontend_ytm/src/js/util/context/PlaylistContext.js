@@ -50,6 +50,18 @@ export function groupSongsByAlbum(songs) {
 }
 
 /**
+ * DATA STRUCTURE:
+ * {
+ *     songs: [
+ *      { song id: {all song data} }
+ *     ]
+ *     playlists: [
+ *         {all playlist data}
+ *     ]
+ * }
+ */
+
+/**
  * Reducer function for playlist state management
  * @param existingPlaylists - the old state
  * @param action - the action to perform & some data
@@ -57,18 +69,22 @@ export function groupSongsByAlbum(songs) {
  */
 export function playlistReducer(existingPlaylists, action) {
     let playlistsCopy = cloneDeep(existingPlaylists)
-    let playlistId = action.payload.playlistId;
     let payloadSongs = action.payload.songs;
+
     // find the playlist we're trying to modify
+    let playlistId = action.payload.playlistId;
     let playlist = playlistsCopy.find((pl) => pl.playlistId === playlistId)
+
     // if it doesn't exist yet: create it
     if (!playlist) {
+        console.log(`PLAYLIST DOESN'T EXIST YET. Action: ${action.type}`)
         playlist = {playlistId: action.payload.playlistId}
         playlistsCopy.push(playlist)
     }
+
     switch (action.type) {
         case SET_PLAYLISTS:
-            // initialize all playlists
+            // This is called after fetching the list of playlists from flask: /library
             let payloadPlaylists = action.payload.playlists.map((playlist) => {
                 let thisExistingPlaylist = playlistsCopy.find((pl) => pl.playlistId === playlist.playlistId);
                 if (!songsExist(playlist)){
@@ -79,11 +95,12 @@ export function playlistReducer(existingPlaylists, action) {
             playlistsCopy = payloadPlaylists;
             break;
         case SET_SONGS:
-            // set the songs for this playlist (and get rid of any existing ones)
+            // This is called after fetching the songs for a playlist from flask: /playlist?id=
             playlist.songs = payloadSongs;
             playlist.numSongs = playlist.songs.length;
             break;
         case ADD_SONGS:
+            // This is called after I add some songs to a playlist and they are added successfully
             // TODO adding and removing songs would be simpler if I had a master list of all song objects
             //  (including setVideoIds for each playlist) and each playlist had a list of song ids
             // add to the list of songs for this playlist
@@ -104,6 +121,7 @@ export function playlistReducer(existingPlaylists, action) {
             // })
             break;
         case REMOVE_SONGS:
+            // This is called after I remove some songs from a playlist and they are removed successfully
             let setVideoIds = payloadSongs.map((song) => song.setVideoId)
             let videoIds = payloadSongs.map((song) => song.videoId)
             // remove the songs from THIS playlist

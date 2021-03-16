@@ -54,12 +54,12 @@ def persistAllSongData(songs_to_add, playlist_id):
         # persist the song/playlist relationship
         insert_song_playlist = "INSERT INTO songs_in_playlist " \
                                "(playlist_id, song_id, set_video_id, datetime_added, index) " \
-                               "VALUES (%s, %s, %s, %s, %s)"
+                               "VALUES (%s, %s, %s, %s, %s) " \
+                               "ON CONFLICT ON CONSTRAINT songs_in_playlist_pkey " \
+                               "DO NOTHING " \
+                               # "DO UPDATE SET index=excluded.index"
         isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
-        try:
-            executeSQL(insert_song_playlist, isp_data)
-        except Exception as e:
-            logException(e)
+        executeSQL(insert_song_playlist, isp_data)
 
         # persist the song/artist relationships
         insert_song_artist = "INSERT INTO artist_songs (song_id, artist_id) VALUES (%s, %s) " \
