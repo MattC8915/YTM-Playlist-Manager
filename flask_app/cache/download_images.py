@@ -58,7 +58,7 @@ def updatePlaylists():
         playlist_id = r[0]
         if playlist_id == "LM":
             continue
-        p = getPlaylist(playlist_id, ignore_cache=False)
+        p = getPlaylist(playlist_id, ignore_cache=True)
         time.sleep(60)
 
 
