@@ -5,6 +5,7 @@ from flask import Flask, request, send_file
 
 from cache import cache_service as cs
 from db import ytm_db_service
+from log import setupCustomLogger
 from ytm_api import ytm_service
 
 app = Flask(__name__)
@@ -115,4 +116,5 @@ def shouldIgnoreCache(request_args):
 
 
 if __name__ == '__main__':
+    setupCustomLogger("flask")
     app.run("localhost", 5050)

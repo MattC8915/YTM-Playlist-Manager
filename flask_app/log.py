@@ -1,4 +1,5 @@
 import logging.handlers
+import os
 import sys
 import traceback
 
@@ -9,7 +10,7 @@ def setupCustomLogger(name):
     global mylogger
     print("Setting up logging .. filename: {0}".format(name))
     # logger settings
-    log_file = "~/python/ytm_playlist_manager/logs" + "{0}.log".format(name)
+    log_file = os.path.expanduser(f"~/python/ytm_playlist_manager/logs/{name}.log")
 
     # 50 Mb
     log_file_max_size = 1024 * 1024 * 50

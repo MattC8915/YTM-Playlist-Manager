@@ -13,7 +13,7 @@ from db.db_service import executeSQL, executeSQLFetchAll
 
 
 # to turn a base64 string back into a url: binascii.unhexlify
-from log import logMessage
+from log import logMessage, setupCustomLogger
 
 
 def downloadImages():
@@ -66,6 +66,7 @@ def updatePlaylists():
 
 
 def updateData():
+    setupCustomLogger("update")
     updatePlaylists()
     downloadImages()
 
