@@ -117,4 +117,4 @@ def shouldIgnoreCache(request_args):
 
 if __name__ == '__main__':
     setupCustomLogger("flask")
-    app.run("localhost", 5050)
+    app.run(host="localhost", port=5050)

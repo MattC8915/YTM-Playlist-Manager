@@ -3,11 +3,11 @@ import os
 import sys
 import traceback
 
-mylogger: logging.Logger = None
+my_logger: logging.Logger = None
 
 
 def setupCustomLogger(name):
-    global mylogger
+    global my_logger
     print("Setting up logging .. filename: {0}".format(name))
     # logger settings
     log_file = os.path.expanduser(f"~/python/ytm_playlist_manager/logs/{name}.log")
@@ -20,14 +20,6 @@ def setupCustomLogger(name):
     date_format = "%Y-%m-%d %H:%M:%S"
 
     # setup info file
-    info_file = logging.handlers.RotatingFileHandler(
-        log_file, maxBytes=log_file_max_size, backupCount=log_num_backups)
-    info_file.setLevel(logging.INFO)
-    formatter = logging.Formatter(log_format, datefmt=date_format)
-    info_file.setFormatter(formatter)
-
-    log_file = log_file.replace(".log", "_debug.log")
-    # setup debug file
     debug_file = logging.handlers.RotatingFileHandler(
         log_file, maxBytes=log_file_max_size, backupCount=log_num_backups)
     debug_file.setLevel(logging.DEBUG)
@@ -35,34 +27,33 @@ def setupCustomLogger(name):
     debug_file.setFormatter(formatter)
 
     # setup stdout
-    consoleHandler = logging.StreamHandler(sys.stdout)
-    consoleHandler.setLevel(logging.DEBUG)
-    logFormatter = logging.Formatter(log_format, datefmt=date_format)
-    consoleHandler.setFormatter(logFormatter)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+    log_formatter = logging.Formatter(log_format, datefmt=date_format)
+    console_handler.setFormatter(log_formatter)
 
-    mylogger = logging.getLogger(name)
-    mylogger.setLevel(logging.DEBUG)
-    if len(mylogger.handlers) != 3:
-        mylogger.addHandler(debug_file)
-        mylogger.addHandler(info_file)
-        mylogger.addHandler(consoleHandler)
+    my_logger = logging.getLogger(name)
+    my_logger.setLevel(logging.DEBUG)
+    if len(my_logger.handlers) != 3:
+        my_logger.addHandler(debug_file)
+        my_logger.addHandler(console_handler)
 
-    return mylogger
+    return my_logger
 
 
 def logMessage(message, debug_level=logging.INFO):
-    global mylogger
+    global my_logger
     try:
-        mylogger.log(debug_level, message)
+        my_logger.log(debug_level, message)
     except Exception:
         log_name = sys.argv[1] if len(sys.argv) > 1 else "flask"
         if log_name == "run" or log_name == "-b":
             log_name = "flask"
         setupCustomLogger(log_name)
-        if mylogger is None:
+        if my_logger is None:
             print(message)
         else:
-            mylogger.log(debug_level, message)
+            my_logger.log(debug_level, message)
 
 
 def logConfigException(e):
