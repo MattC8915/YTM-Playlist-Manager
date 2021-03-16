@@ -8,6 +8,7 @@ from db import data_models as dm
 from db.db_service import executeSQLFetchOne, executeSQL
 from db.ytm_db_service import getPlaylistsFromDb, persistAllPlaylists, getPlaylistSongsFromDb, persistPlaylistSongs, \
     getNumSongsInPlaylist
+from log import logMessage
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
 from ytm_api.ytm_service import findDuplicatesAndAddFlag
 
@@ -89,7 +90,7 @@ class CachedData:
         """
         use_api = ignore_cache or not self.shouldUseCache(data_id)
         if not self.data_type == DataType.THUMBNAIL:
-            print(f"Getting data for [{self.data_type.value}: {data_id}] from [{'YTM' if use_api else 'DB'}]")
+            logMessage(f"Getting data for [{self.data_type.value}: {data_id}] from [{'YTM' if use_api else 'DB'}]")
         if use_api:
             data = self.getDataFromYTMWrapper(data_id, extra_data)
         else:

@@ -4,6 +4,7 @@ from typing import List
 
 from db import data_models as dm
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
+from log import logException
 
 
 def getArtistId(name):
@@ -42,7 +43,7 @@ def persistAllSongData(songs_to_add, playlist_id):
             try:
                 executeSQL(insert_album, album_data)
             except Exception as e:
-                print(e)
+                logException(e)
 
         # persist the song
         insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local) " \
@@ -58,7 +59,7 @@ def persistAllSongData(songs_to_add, playlist_id):
         try:
             executeSQL(insert_song_playlist, isp_data)
         except Exception as e:
-            print(e)
+            logException(e)
 
         # persist the song/artist relationships
         insert_song_artist = "INSERT INTO artist_songs (song_id, artist_id) VALUES (%s, %s) " \

@@ -13,6 +13,9 @@ from db.db_service import executeSQL, executeSQLFetchAll
 
 
 # to turn a base64 string back into a url: binascii.unhexlify
+from log import logMessage
+
+
 def downloadImages():
     # find thumbnails to download
     select = "SELECT thumbnail_id, downloaded, size, filepath FROM thumbnail_download " \
@@ -29,17 +32,17 @@ def downloadImages():
         filename_from_url += ".png"
         # download to filepath
         full_filepath = f"{filepath}{filename_from_url}"
-        print(f"Getting image from {thumbnail.url}")
-        print(f"Saving to: {full_filepath}")
+        logMessage(f"Getting image from {thumbnail.url}")
+        logMessage(f"Saving to: {full_filepath}")
         with open(full_filepath, 'wb') as img_file:
             response = requests.get(thumbnail.url, stream=True)
             if not response:
-                print(response)
+                logMessage(response)
                 continue
             else:
                 for block in response.iter_content(1024):
                     if not block:
-                        print("Done getting image")
+                        logMessage("Done getting image")
                         break
                     img_file.write(block)
 
