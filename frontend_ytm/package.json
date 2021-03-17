@@ -80,7 +80,7 @@
     "workbox-webpack-plugin": "5.1.4"
   },
   "scripts": {
-    "start": "NODE_ENV=development; node scripts/start.js",
+    "start": "PORT=3000;NODE_ENV=development; node scripts/start.js",
     "build": "node scripts/build.js",
     "test": "node scripts/test.js"
   },
