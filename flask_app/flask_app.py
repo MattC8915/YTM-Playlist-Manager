@@ -1,11 +1,13 @@
 """Flask endpoints"""
 import json
 
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, make_response
 
 from cache import cache_service as cs
 from db import ytm_db_service
-from log import setupCustomLogger
+from db.data_models import ActionType
+from db.ytm_db_service import persistSongActionFromIds
+from log import setupCustomLogger, logMessage
 from ytm_api import ytm_service
 
 app = Flask(__name__)
@@ -52,7 +54,9 @@ def addSongsToPlaylistEndpoint():
     request_body = request.json
     playlist_id = request_body["playlist"]
     songs = request_body["songs"]
+    logMessage(f"Addings songs [{songs}] to playlist [{playlist_id}]")
     success_ids, already_there_ids, failure_ids = ytm_service.addSongsToPlaylist(playlist_id, songs)
+    logMessage(f"Success: {success_ids}\nAlready there: {already_there_ids}\nFailure: {failure_ids}")
     if success_ids:
         # if some songs succeeded: get updated data for this playlist from YTM
         cs.getPlaylist(playlist_id, ignore_cache=True)
@@ -61,7 +65,7 @@ def addSongsToPlaylistEndpoint():
     return httpResponse({"failed": failure_ids, "already_there": already_there_ids, "success": success_ids}, 500)
 
 
-@app.route("/removeSongs", methods=["PUT"])
+@app.route("/removeSongs", methods=["DELETE"])
 def removeSongsFromPlaylistEndpoint():
     """
     This is called when I select some songs and remove them from a playlist
@@ -70,11 +74,13 @@ def removeSongsFromPlaylistEndpoint():
     request_body = request.json
     playlist_id = request_body["playlist"]
     songs = request_body["songs"]
+    logMessage(f"Removing songs [{songs}] from playlist [{playlist_id}]")
     resp = ytm_service.removeSongsFromPlaylist(playlist_id, songs)
+    logMessage(f"YTM response: {resp}")
     if ytm_service.isSuccessFromYTM(resp):
-        ytm_db_service.deleteSongsFromPlaylistInDb(playlist_id, [s["setVideoId"] for s in songs])
         return successResponse("success")
-    return errorResponse("error")
+    else:
+        return errorResponse("error")
 
 
 @app.route("/playlist/<playlist_id>", methods=["GET"])
@@ -102,7 +108,9 @@ def getAllPlaylistsEndpoint():
 
 @app.route("/images/<image_name>", methods=["GET"])
 def get_image(image_name):
-    return send_file(filename_or_fp="./images/" + image_name, mimetype="image/png")
+    resp = make_response(send_file(filename_or_fp="./images/" + image_name, mimetype="image/png"))
+    resp.headers['Content-Transfer-Encoding']='base64'
+    return resp
 
 
 def shouldIgnoreCache(request_args):

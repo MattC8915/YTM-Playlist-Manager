@@ -12,9 +12,9 @@ import {useStateWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {useNavigate} from "@reach/router";
 import {MyToastContext} from "./util/context/MyToastContext";
 import {ERROR_TOAST, SUCCESS_TOAST} from "./App";
-import {SyncOutlined} from "@ant-design/icons";
+import {MinusSquareOutlined, SyncOutlined} from "@ant-design/icons";
 import debounce from "lodash/debounce" ;
-import {groupSongsByAlbum, PlaylistContext} from "./util/context/PlaylistContext";
+import {cloneDeep, groupSongsByAlbum, PlaylistContext} from "./util/context/PlaylistContext";
 import Thumbnail from "./Thumbnail";
 import Checkbox from "antd/lib/checkbox/Checkbox";
 
@@ -32,7 +32,7 @@ export default function Playlist(props) {
     let [selectedPlaylist, setSelectedPlaylist] = useState([]);
     let [isDataLoading, setIsDataLoading] = useState(false);
     let [albumView, setAlbumView] = useState(false);
-    let [filterSingles, setFilterSingles] = useState(true);
+    let [hideSingles, setHideSingles] = useState(true);
 
     let playlistId = props.playlistId
 
@@ -41,28 +41,107 @@ export default function Playlist(props) {
     let [filteringByDupes, setFilteringByDupes] = useState(false);
     let nav = useNavigate();
 
+    let library = playlistContext.library;
     let playlist = useMemo(() => {
-        return playlistContext.playlists.find((pl) => pl.playlistId === playlistId) || {title: "", songs: []}
-    }, [playlistContext.playlists, playlistId])
+        return library.playlists.find((pl) => pl.playlistId === playlistId)  || {"songs": []}
+    }, [library.playlists, playlistId])
+    /**
+     * Removes the given songs from the given playlist
+     * Each songObject must have a videoId and setVideoId property
+     */
+    const removeSongsFromPlaylist = useCallback((playlistId, songObjects) => {
+        songObjects = songObjects.map((song) => {
+            return {"videoId": song.videoId, "setVideoId": song.setVideoId}
+        })
+        let options = {
+            method: "DELETE",
+            body: {
+                playlist: playlistId,
+                songs: songObjects
+            }
+        }
+        return sendRequest("/removeSongs", options)
+            .then((resp) => {
+                playlistContext.removeSongs(playlistId, songObjects)
+                toastContext.addToast("Successfully removed songs", SUCCESS_TOAST)
+                return resp;
+            })
+            .catch((resp) => {
+                console.log("Error removing songs:")
+                console.log(resp)
+                toastContext.addToast("Error removing songs", ERROR_TOAST)
+                return resp;
+            })
+    }, [playlistContext, sendRequest, toastContext])
 
     /**
-     * Memo-ized list of filtered songs. This value will be recomputerd any time the search filter changes or the
+     * Get the song objects for this playlist.
+     * And create the render object for every other playlist it belongs to
+     */
+    let playlistSongs = useMemo(() => {
+        if (songsExist(playlist)) {
+            let idSet = new Set();
+            playlist.songs.forEach((s) => idSet.add(s.setVideoId))
+            if (idSet.size !== playlist.songs.length) {
+                console.log("HEEEYY")
+            }
+        }
+        let songs = playlist.songs.map((playlistSong) => {
+            let canonSong = cloneDeep(library.songs[playlistSong.videoId])
+            if (undefined === playlistSong.index) {
+                throw Error("NO INDEX")
+            }
+            canonSong.index = playlistSong.index
+            canonSong.setVideoId = playlistSong.setVideoId
+            canonSong.isDupe = playlistSong.isDupe
+            canonSong.id = playlistSong.setVideoId
+            canonSong.renderOtherPlaylists = canonSong.playlists
+                .filter((pl) => pl.playlistId !== playlistId)
+                .map((song_in_playlist) => {
+                    return (
+                        <div key={song_in_playlist.playlistId}>
+                            <MinusSquareOutlined onClick={() => {
+                                // noinspection JSIgnoredPromiseFromCall
+                                removeSongsFromPlaylist(song_in_playlist.playlistId, [song_in_playlist])
+                            }}/>
+                            {" "} {song_in_playlist.playlistName}
+                        </div>
+                    )
+                });
+            return canonSong;
+        })
+        if (songs.length > 0) {
+            let idSet = new Set();
+            songs.forEach((s) => idSet.add(s.setVideoId))
+            if (idSet.size !== playlist.songs.length) {
+                console.log("HEEEYY")
+            }
+        }
+        return songs || [];
+    }, [playlist, library.songs, playlistId, removeSongsFromPlaylist])
+
+
+    /**
+     * Memo-ized list of filtered songs. This value will be recomputed any time the search filter changes or the
      * underlying playlist.songs changes
      */
     let filteredSongs = useMemo(() => {
-        let songs = playlist.songs
-        // only include duplicate songs
+        let filtered;
+        // only display duplicate songs (if requested)
         if (filteringByDupes) {
-            songs = songs.filter((song) => song.is_dupe)
+            filtered = playlistSongs.filter((song) => song.isDupe)
+        } else {
+            filtered = playlistSongs
         }
-        // filter songs by each search filter
-        if (searchFilter) {
+
+        // filter songs by each search filter (if there is one)
+        if (searchFilter && searchFilter.trim()) {
             let filteredSet = new Set();
             let values = searchFilter.split("|")
             values.forEach((value) => {
                 value = value.toLowerCase().trim();
                 if (value && value.trim()) {
-                    let filtered = songs.filter((song) => {
+                    filtered = filtered.filter((song) => {
                         return song.title.toString().toLowerCase().includes(value) ||
                             song.artistsString.toString().toLowerCase().includes(value) ||
                             song.albumString.toString().toLowerCase().includes(value) ||
@@ -71,51 +150,50 @@ export default function Playlist(props) {
                     filtered.forEach((s) => filteredSet.add(s))
                 }
             });
-            songs = Array.from(filteredSet)
+            filtered = Array.from(filteredSet)
         }
 
+        // group songs by their album
         if (albumView) {
             // noinspection UnnecessaryLocalVariableJS
-            let albums = groupSongsByAlbum(songs)
-            if (filterSingles) {
+            let albums = groupSongsByAlbum(filtered)
+            if (hideSingles) {
                 albums = albums.filter((album) => album.children.length > 1)
             }
             return albums;
-        } else {
-            return songs
         }
-    }, [albumView, filterSingles, filteringByDupes, playlist.songs, searchFilter])
+        return filtered
+    }, [playlistSongs, albumView, hideSingles, filteringByDupes, searchFilter])
 
     let duplicateSongs = useMemo(() => {
         // search for duplicates in the list of songs
-        let dupes = playlist.songs.filter((song) => song.is_dupe)
-        if (dupes.length === 0) {
+        let dupes = playlistSongs.filter((song) => song.isDupe)
+        if (dupes.length === 0 && filteringByDupes) {
             setFilteringByDupes(false);
         }
         return dupes;
-    }, [playlist.songs])
+    }, [playlistSongs])
     /**
      * Returns the song objects that are currently selected
      */
     const getSelectedSongs = useCallback((includeAlbums, preserveOrder) => {
         let songs;
         if (preserveOrder) {
-            // create a list of songs that is in the same order as the list of selected song ids
-            // (so when I'm adding songs to a playlist they get added in the order I selected them)
+            // create a list of songs that is in the order that I selected them)
             songs = selectedRowIds
-                .map((selectedId) => playlist.songs.find((song) => song.id === selectedId))
+                .map((selectedId) => playlistSongs.find((song) => song.id === selectedId))
                 .filter((sid) => sid)
         }
         else {
-            // create list without worrying about the order (it will be in the same order as playlist.songs)
-            songs =  playlist.songs.filter((song) => selectedRowIds.includes(song.id))
+            // create list without worrying about the order (it will be in the same order as they appear in the playlist)
+            songs =  playlistSongs.filter((song) => selectedRowIds.includes(song.id))
         }
         if (albumView && includeAlbums) {
             let albums = playlist.albumView.filter((album) => selectedRowIds.includes(album.id))
             songs.push(...albums)
         }
         return songs
-    }, [albumView, playlist.albumView, playlist.songs, selectedRowIds])
+    }, [albumView, playlist.albumView, playlistSongs, selectedRowIds])
 
 
     /**
@@ -123,7 +201,7 @@ export default function Playlist(props) {
      */
     function removeSelectedRows() {
         let selectedSongs = getSelectedSongs(false, false)
-        playlistContext.removeSongs(playlistId, selectedSongs)
+        removeSongsFromPlaylist(playlistId, selectedSongs)
             .then(() => {
                 // de-select all rows
                 setSelectedRowIds([])
@@ -144,11 +222,7 @@ export default function Playlist(props) {
         sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
                 let songs = resp.tracks
-                songs.forEach((song, index) => {
-                    // add an index, so we can preserve the original order of the songs
-                    song.index = index;
-                })
-                playlistContext.setSongs(playlistId, songs)
+                playlistContext.setSongs(playlistId, songs, forceRefresh)
 
                 // if the user had selected songs before refreshing: select those songs again
                 if (selectedIds) {
@@ -169,7 +243,7 @@ export default function Playlist(props) {
     }, [getSelectedSongs, playlistContext, playlistId, sendRequest, toastContext])
 
     useEffect(() => {
-        if (playlistId && !songsExist(playlist) && !fetchedSongs) {
+        if (playlistId && !playlist.fetchedAllSongs && !fetchedSongs) {
             // fetch song data from backend if not done already
             setFetchedSongs(true);
             fetchSongs();
@@ -192,24 +266,21 @@ export default function Playlist(props) {
         if (sorter.column) {
             let columnKey = sorter.column.dataIndex
             let ascend = sorter.order === "ascend"
-            sortFunction = (a, b) => {
-                if (ascend) {
-                    return a[columnKey] > b[columnKey] ? -1 : 1
-                } else {
-                    return a[columnKey] > b[columnKey] ? 1 : -1
-                }
-            }
+            sortFunction = ascend ?
+                (a, b) => a[columnKey] > b[columnKey] ? 1 : -1 :
+                (a, b) => a[columnKey] > b[columnKey] ? -1 : 1
         } else {
-            sortFunction = (a, b) => {
-                return a["index"] > b["index"] ? 1 : -1;
-            }
+            sortFunction = (a, b) => a["index"] > b["index"] ? 1 : -1;
         }
 
         // do the sorting
-        let sortedSongs = playlist.songs.sort(sortFunction)
-
+        let sortedSongIds = playlistSongs
+            .sort(sortFunction)
+            // .map((song) => {
+            //     return {videoId: song.videoId, setVideoId: song.setVideoId}
+            // })
         // set the state
-        playlistContext.setSongs(playlistId, sortedSongs);
+        playlistContext.sortSongs(playlistId, sortedSongIds);
     }
 
     // Define the columns in the for the playlist
@@ -252,15 +323,32 @@ export default function Playlist(props) {
         },
         {
             title: "Playlists",
-            dataIndex: "otherPlaylistsRender",
-            key: "otherPlaylistsRender",
+            dataIndex: "renderOtherPlaylists",
+            key: "renderOtherPlaylists",
             sorter: true
         },
         {
             title: "Index",
             dataIndex: "index",
             key: "index",
-            sorter: true
+            sorter: true,
+            render: (text, record) => {
+                let approvedProperties = ["index", "videoId", "setVideoId", "album", "artists", "playlists",
+                    "thumbnail", "id", "name", "url", "filepath", "playlistId", "playlistName"]
+                return (
+                    <Popover style={{borderWidth: '2px !important', borderStyle: 'solid !important'}}
+                             trigger={"click"}
+                             content={(
+                                 <pre>
+                                    <code>
+                                        {JSON.stringify(record, approvedProperties, 2)}
+                                    </code>
+                                </pre>
+                    )}>
+                        <Button>{text}</Button>
+                    </Popover>
+                )
+            }
         },
     ]
 
@@ -273,12 +361,12 @@ export default function Playlist(props) {
         let responseToastData = [
             {
                 key: "already_there",
-                toastString: "are already in the playlist",
+                toastString: "are ALREADY IN the playlist",
                 is_success: false
             },
             {
                 key: "failed",
-                toastString: "failed for an unknown reason",
+                toastString: "failed for an UNKNOWN REASON",
                 is_success: false
             },
             {
@@ -288,10 +376,13 @@ export default function Playlist(props) {
             }
         ]
         let toastCreated = false;
+        resp.success = resp.success ? resp.success.map((song) => song.videoId) : []
         responseToastData.forEach((data) => {
             // find the song names that are in this list
-            if (resp[data.key]) {
+            if (resp[data.key] && resp[data.key].length > 0) {
+                let nextSongIds = resp[data.key];
                 let songStr = getSelectedSongs(false, false)
+                    .filter((song) => nextSongIds.includes(song.videoId))
                     .map((song) => song.title)
                     .join(" || ");
                 if (songStr) {
@@ -325,12 +416,16 @@ export default function Playlist(props) {
         }
         sendRequest("/addSongs", options)
             .then((resp) => {
+                playlistContext.addSongs(selectedPlaylist.playlistId, resp.success)
                 displayAddToPlaylistResponseToast(resp)
             })
             .catch((resp) => {
                 console.log("Error adding songs to playlist");
                 console.log(resp);
-                displayAddToPlaylistResponseToast(resp)
+                if (resp && resp.success) {
+                    playlistContext.addSongs(selectedPlaylist.playlistId, resp.success)
+                    displayAddToPlaylistResponseToast(resp)
+                }
             })
             .finally(() => {
                 setShowPlaylistOptions(false)
@@ -352,7 +447,7 @@ export default function Playlist(props) {
             <Table
                 columns={[{title: "Playlist name", dataIndex: "title"}]}
                 showHeader={false}
-                dataSource={props.playlists.filter((pl) => pl.playlistId !== "LM" && pl.playlistId !== playlist.playlistId)}
+                dataSource={library.playlists.filter((pl) => pl.playlistId !== "LM" && pl.playlistId !== playlistId)}
                 rowKey={"playlistId"}
                 size={"small"}
                 scroll={{y: 300, x: 200}}
@@ -405,10 +500,10 @@ export default function Playlist(props) {
                         </Checkbox>
                         {albumView && (
                             <Checkbox
-                                checked={filterSingles}
-                                onChange={() => setFilterSingles(!filterSingles)}>
+                                checked={hideSingles}
+                                onChange={() => setHideSingles(!hideSingles)}>
                                 <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
-                                    Filter Singles
+                                    Hide Singles
                                 </div>
                             </Checkbox>
                         )}
@@ -455,6 +550,21 @@ export default function Playlist(props) {
 
             {/*Table with all the songs*/}
             <Table
+                scroll={{scrollToFirstRowOnChange: true}}
+                rowClassName={(record) => record.isDupe ? "dupe" : ""}
+                sticky={{offsetHeader: 50+66+24}}
+                columns={columns}
+                loading={isDataLoading}
+                dataSource={filteredSongs}
+                onChange={tableSortChange}
+                pagination={{
+                    position: ["topRight", "bottomRight"],
+                    defaultPageSize: 100,
+                    pageSizeOptions: [100, 1000, 10000],
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
+                }
+                rowKey={"id"}
+                size={"small"}
                 rowSelection={{
                     selectedRowKeys: selectedRowIds,
                     type: "checkbox",
@@ -494,22 +604,6 @@ export default function Playlist(props) {
                         setSelectedRowIds(newSelectedRowIds)
                     },
                 }}
-                scroll={{scrollToFirstRowOnChange: true}}
-                rowClassName={(record) => record.is_dupe ? "dupe" : ""}
-                sticky={{offsetHeader: 50+66+24}}
-                columns={columns}
-                loading={isDataLoading}
-                // dataSource={albumView ? playlist.albumView : playlist.songs}
-                dataSource={filteredSongs}
-                onChange={tableSortChange}
-                pagination={{
-                    position: ["topRight", "bottomRight"],
-                    defaultPageSize: 100,
-                    pageSizeOptions: [100, 1000, 10000],
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
-                }
-                rowKey={"id"}
-                size={"small"}
             />
         </div>
     );

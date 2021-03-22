@@ -13,7 +13,7 @@ import {
     playlistReducer,
     REMOVE_SONGS,
     SET_PLAYLISTS,
-    SET_SONGS
+    SET_SONGS, SORT_SONGS
 } from "./util/context/PlaylistContext";
 
 export const INFO_TOAST = "INFO";
@@ -21,8 +21,8 @@ export const SUCCESS_TOAST = "SUCCESS";
 export const WARNING_TOAST = "WARNING";
 export const ERROR_TOAST = "ERROR";
 function App() {
-    // let [playlists, playlistsDispatch] = useReducerWithSessionStorage("playlist-manager-playlists", playlistReducer, []);
-    let [playlists, playlistsDispatch] = useReducer(playlistReducer, []);
+    // let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(playlistReducer, {});
+    let [libraryData, playlistsDispatch] = useReducer(playlistReducer, {"playlists": [], "songs": {}});
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
 
@@ -75,44 +75,19 @@ function App() {
         playlistsDispatch({type: SET_PLAYLISTS, payload: {playlists: playlists}})
     }, [playlistsDispatch])
 
-    function setSongsForPlaylist(playlistId, songs) {
-        playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId, removeSongs: removeSongsFromPlaylist}})
+    function setSongsForPlaylist(playlistId, songs, refreshSongs) {
+        playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId, refresh: refreshSongs}})
+    }
+    function sortSongsForPlaylist(playlistId, songs) {
+        playlistsDispatch({type: SORT_SONGS, payload: {songIds: songs, playlistId: playlistId}})
     }
     function addSongsToPlaylist(playlistId, songs) {
-        playlistsDispatch({type: ADD_SONGS, payload: {songs: songs, playlistId: playlistId, removeSongs: removeSongsFromPlaylist}})
+        playlistsDispatch({type: ADD_SONGS, payload: {songIds: songs, playlistId: playlistId}})
     }
-    const removeSongsFromState = useCallback((playlistId, songs) => {
-        playlistsDispatch({type: REMOVE_SONGS, payload: {songs: songs, playlistId: playlistId, removeSongs: removeSongsFromPlaylist}})
-    }, [])
+    function removeSongsFromState(playlistId, songs) {
+        playlistsDispatch({type: REMOVE_SONGS, payload: {songs: songs, playlistId: playlistId}})
+    }
 
-    /**
-     * Removes the given songs from the given playlist
-     * Each songObject must have a videoId and setVideoId property
-     */
-    const removeSongsFromPlaylist = useCallback((playlistId, songObjects) => {
-        songObjects = songObjects.map((song) => {
-            return {"videoId": song.videoId, "setVideoId": song.setVideoId}
-        })
-        let options = {
-            method: "PUT",
-            body: {
-                playlist: playlistId,
-                songs: songObjects
-            }
-        }
-        return sendRequest("/removeSongs", options)
-            .then((resp) => {
-                removeSongsFromState(playlistId, songObjects)
-                addToast("Successfully removed songs", SUCCESS_TOAST)
-                return resp;
-            })
-            .catch((resp) => {
-                console.log("Error removing songs:")
-                console.log(resp)
-                addToast("Error removing songs", ERROR_TOAST)
-                return resp;
-            })
-    }, [addToast, removeSongsFromState, sendRequest])
 
     /**
      * Fetch the list of playlists from the backend
@@ -141,9 +116,9 @@ function App() {
 
     return (
       <div>
-          <PlaylistContext.Provider value={{playlists: playlists, addSongs: addSongsToPlaylist,
-              setSongs: setSongsForPlaylist, removeSongs: removeSongsFromPlaylist,
-              removeSongsFromState: removeSongsFromState}}>
+          <PlaylistContext.Provider value={{library: libraryData, addSongs: addSongsToPlaylist,
+              setSongs: setSongsForPlaylist, sortSongs: sortSongsForPlaylist,
+              removeSongs: removeSongsFromState}}>
           <MyToastContext.Provider value={{addToast: addToast}}>
               <ToastContainer
                   position="top-right"
@@ -157,12 +132,10 @@ function App() {
                   pauseOnHover/>
               <Router>
                 <PlaylistList path={"/"}
-                              playlists={playlists}
+                              playlists={libraryData.playlists}
                               loadPlaylists={loadPlaylists}
                 />
-                <Playlist path={"/songs/:playlistId"}
-                          playlists={playlists}
-                />
+                <Playlist path={"/songs/:playlistId"}/>
               </Router>
           </MyToastContext.Provider>
           </PlaylistContext.Provider>

@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import List
 
+from cache import cache_service
 from db import data_models as dm
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 from log import logException
@@ -21,10 +22,19 @@ def getArtistId(name):
     return result[0] if result else None
 
 
+def updateSongInPlaylist(new_song_object, playlist_id):
+    update = "UPDATE songs_in_playlist " \
+             "set index = %s " \
+             "where set_video_id = %s " \
+             "and playlist_id = %s"
+    data = new_song_object.index, new_song_object.set_video_id, playlist_id
+    executeSQL(update, data)
+
+
 def persistAllSongData(songs_to_add, playlist_id):
     """
     Persists songs to the database if it doesn't exist.
-    Persists the song's artists to the database if they doesn't exist.
+    Persists the song's artists to the database if they don't exist.
     Persists the song's album to the database if it doesn't exist.
 
     :param songs_to_add:
@@ -89,7 +99,7 @@ def deleteSongsFromPlaylistInDb(playlist_id, set_video_ids):
     executeSQL(delete, delete_data)
 
 
-def persistPlaylistSongs(playlist_id, new_songs):
+def persistPlaylistSongs(playlist_id, new_songs: 'List[dm.Song]'):
     """
     This is called after I get all the songs that are in a playlist from the YTM api.
     Deletes any songs that are no longer in the playlist since the last time I checked. And persists any new ones.
@@ -97,27 +107,47 @@ def persistPlaylistSongs(playlist_id, new_songs):
     :param new_songs:
     :return:
     """
-    # TODO if the sorting for the playlist changes: the index in the sip table will get fucked upt
 
-    # create Song objects for songs I just got from YTM
     if len(new_songs) > 0 and isinstance(new_songs[0], dict):
         raise Exception("this shouldn't happen")
         # new_songs = [Song.from_json(s, False) for s in new_songs]
+
     # get Song objects for existing songs in the database
     existing_songs = getPlaylistSongsFromDb(playlist_id)
+    # TODO next setVideoIds are duplicated all the time!! What if song A was removed and song B was added
+    #  but it was given the same setVideoId
     # get ids for new and existing songs
-    existing_song_ids = {s.set_video_id for s in existing_songs}
-    new_song_ids = {s.set_video_id for s in new_songs}
+    existing_song_ids = {(s.video_id, s.set_video_id) for s in existing_songs}
+    new_song_ids = {(s.video_id, s.set_video_id) for s in new_songs}
+    playlist_obj = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
 
-    # delete entries in songs_in_playlist for songs that were removed from the playlist
-    ids_to_delete = existing_song_ids.difference(new_song_ids)
-    if ids_to_delete:
-        deleteSongsFromPlaylistInDb(playlist_id, ids_to_delete)
+    song_ids_to_delete = existing_song_ids.difference(new_song_ids)
+    song_ids_to_add = new_song_ids.difference(existing_song_ids)
+    song_ids_to_update = existing_song_ids.intersection(new_song_ids)
 
+    if song_ids_to_delete:
+        # delete entries in songs_in_playlist for songs that were removed from the playlist
+        set_video_ids_to_delete = [s[1] for s in song_ids_to_delete]
+        deleteSongsFromPlaylistInDb(playlist_id, set_video_ids_to_delete)
+        songs_to_delete = [song for song in new_songs
+                           if song.set_video_id in set_video_ids_to_delete]
+        persistSongAction(playlist_obj, songs_to_delete, through_ytm=True, success=True,
+                          action_type=dm.ActionType.REMOVE_SONG)
     # persist new songs
-    ids_to_add = new_song_ids.difference(existing_song_ids)
-    songs_to_add = [ns for ns in new_songs if ns.set_video_id in ids_to_add]
-    persistAllSongData(songs_to_add, playlist_id)
+    if song_ids_to_add:
+        set_video_ids_to_add = [s[1] for s in song_ids_to_add]
+        songs_to_add = [song for song in new_songs if song.set_video_id in set_video_ids_to_add]
+        persistAllSongData(songs_to_add, playlist_id)
+        persistSongAction(playlist_obj, songs_to_add, through_ytm=True, success=True,
+                          action_type=dm.ActionType.ADD_SONG)
+    # Check if the index of the song needs to be updated
+    if song_ids_to_update:
+        set_video_ids_to_update = [s[1] for s in song_ids_to_update]
+        for set_video_id in set_video_ids_to_update:
+            existing_song_to_update = next((s for s in existing_songs if s.set_video_id == set_video_id))
+            new_song_to_update = next((s for s in new_songs if s.set_video_id == set_video_id))
+            if existing_song_to_update.index != new_song_to_update.index:
+                updateSongInPlaylist(new_song_to_update, playlist_id)
 
 
 def updateDictEntry(the_dict, key, new_val):
@@ -206,6 +236,29 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     return playlist_objs[0] if playlist_id else playlist_objs
 
 
+def getSongFromDb(song_id, playlist_id, include_song_playlists):
+    # TODO what happens when we run this query for song_id and that song is in multiple playlists
+    # use inner join if getting songs from a playlist because we only want songs that are in songs_in_playlist
+    # use left join if getting a specific song because we don't care if the song is in songs_in_playlist
+    sip_join = "inner" if playlist_id else "left"
+    # noinspection SqlResolve
+    select = f"SELECT s.id, s.name, alb.name, alb.id, alb.thumbnail_id, " \
+             f"s.length, s.explicit, s.is_local, sip.set_video_id, sip.index " \
+             f"FROM song as s " \
+             f"left join album as alb on s.album_id=alb.id " \
+             f"{sip_join} join songs_in_playlist as sip on s.id=sip.song_id "
+    data = ()
+    if song_id:
+        select += " AND s.id = %s"
+        data += song_id,
+    if playlist_id:
+        select += " AND sip.playlist_id = %s"
+        data += playlist_id,
+    select += " order by sip.index"
+    result = executeSQLFetchAll(select, data)
+    return [dm.Song.from_db(r, include_playlists=include_song_playlists) for r in result]
+
+
 def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     """
     Get all the songs that belong to a playlist from the db
@@ -213,21 +266,8 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     :param convert_to_json:
     :return:
     """
-    select = "SELECT s.id, s.name, alb.name, alb.id, alb.thumbnail_id, " \
-             "s.length, s.explicit, s.is_local, sip.set_video_id, sip.index " \
-             "FROM song as s, album as alb, songs_in_playlist as sip " \
-             "WHERE s.album_id = alb.id " \
-             "AND sip.playlist_id = %s " \
-             "AND sip.song_id = s.id " \
-             "order by sip.index"
-    data = playlist_id,
-    result = executeSQLFetchAll(select, data)
-    song_lst = []
-    song_ids = set()
-    for song in result:
-        s_obj = dm.Song.from_db(song, True)
-        song_ids.add(s_obj.video_id)
-        song_lst.append(s_obj)
+    song_lst = getSongFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True)
+    song_ids = {s.video_id for s in song_lst}
 
     # find the artists for each song
     select_artists = "SELECT a.id, a.name, a.thumbnail_id, ass.song_id " \
@@ -248,3 +288,37 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
         next_song.artists = artists
 
     return song_lst if not convert_to_json else [s.to_json() for s in song_lst]
+
+
+def flattenList(parent_list):
+    flat_list = []
+    for sublist in parent_list:
+        if isinstance(sublist, list):
+            for item in sublist:
+                flat_list.append(item)
+        else:
+            flat_list.append(sublist)
+    return flat_list
+
+
+def persistSongActionFromIds(playlist_id, songs_ids: List[str], through_ytm, success, action_type):
+    # TODO next this also needs to record the setVideoId of each song
+    playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
+    songs = [getSongFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in songs_ids]
+    songs = flattenList(songs)
+    persistSongAction(playlist, songs, through_ytm, success, action_type)
+
+
+def persistSongAction(playlist: 'dm.Playlist', songs: 'List[dm.Song]', through_ytm, success, action_type):
+    for song in songs:
+        action = dm.PlaylistActionLog(action_type, datetime.now().timestamp(), through_ytm, success,
+                                      playlist.playlist_id, playlist.name, song.video_id, song.title)
+        persistPlaylistAction(action)
+
+
+def persistPlaylistAction(playlist_action: 'dm.PlaylistActionLog'):
+    insert = "INSERT INTO playlist_action_log (action_type, timestamp, done_through_ytm, was_success, playlist_id," \
+             " playlist_name, song_id, song_name) " \
+             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    data = playlist_action.to_db()
+    executeSQL(insert, data)

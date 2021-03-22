@@ -74,6 +74,5 @@ def getExceptionStackTrace(exc_type=None, value=None, tb=None):
     trace_list = traceback.format_exception(exc_type, value, tb)
 
     for x in trace_list:
-        if "/summarybot/" in x:
-            exc_str += "\n\n" + x
+        exc_str += "\n\n" + x
     return exc_str

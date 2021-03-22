@@ -78,7 +78,7 @@ class CachedData:
         data = item_id, self.data_type.value, datetime.now().timestamp()
         executeSQL(insert, data)
 
-    def getData(self, data_id, ignore_cache, extra_data=None):
+    def getData(self, data_id, ignore_cache, extra_data=None, do_additional_processing=False):
         """
         Get data. Either from the database or YTM.
         We use the api if ignore_cache is true OR the cache for this item has been invalidated.
@@ -95,7 +95,7 @@ class CachedData:
             data = self.getDataFromYTMWrapper(data_id, extra_data)
         else:
             data = self.getDataFromDb(data_id, extra_data)
-        return self.additionalDataProcessing(data)
+        return self.additionalDataProcessing(data) if do_additional_processing else data
 
     def getDataFromYTMWrapper(self, data_id, extra_data=None):
         """
@@ -106,6 +106,8 @@ class CachedData:
         :return:
         """
         try:
+            if not extra_data:
+                extra_data = {}
             resp = self.getDataFromYTM(data_id, extra_data)
             self.updateCache(data_id)
             return resp
@@ -126,10 +128,10 @@ class CachedData:
         """
         return data
 
-    def getDataFromDb(self, data_id, extra_data=None):
+    def getDataFromDb(self, data_id, extra_data):
         raise NotImplementedError("something wrong")
 
-    def getDataFromYTM(self, data_id, extra_data=None):
+    def getDataFromYTM(self, data_id, extra_data):
         raise NotImplementedError("uh oh")
 
 
@@ -142,11 +144,11 @@ class CachedLibrary(CachedData):
         super().__init__()
         self.data_type = DataType.LIBRARY
 
-    def getDataFromDb(self, data_id, extra_data=None):
+    def getDataFromDb(self, data_id, extra_data):
         resp = getPlaylistsFromDb(convert_to_json=True)
         return resp
 
-    def getDataFromYTM(self, data_id, extra_data=None):
+    def getDataFromYTM(self, data_id, extra_data):
         playlist_list = getYTMClient().get_library_playlists(limit=100)
         playlist_objs = [dm.Playlist.from_json(pl) for pl in playlist_list]
         persistAllPlaylists(playlist_objs)
@@ -169,20 +171,20 @@ class CachedPlaylist(CachedData):
         findDuplicatesAndAddFlag(data["tracks"])
         return data
 
-    def getDataFromDb(self, data_id, extra_data=None):
+    def getDataFromDb(self, data_id, extra_data):
         # get songs from db
         tracks = getPlaylistSongsFromDb(data_id, convert_to_json=False)
         playlist_obj: dm.Playlist = getPlaylistsFromDb(convert_to_json=False, playlist_id=data_id)
         playlist_obj.songs = tracks
-        return playlist_obj.to_json()
+        return playlist_obj.to_json() if extra_data.get("json") else playlist_obj
 
-    def getDataFromYTM(self, data_id, extra_data=None):
+    def getDataFromYTM(self, data_id, extra_data):
         # get songs from YTM
         resp = getYTMClient().get_playlist(data_id, limit=10000)
         playlist_obj = dm.Playlist.from_json(resp)
         # persist them
         persistPlaylistSongs(data_id, playlist_obj.songs)
-        return playlist_obj.to_json()
+        return playlist_obj.to_json() if extra_data.get("json") else playlist_obj
 
 
 class CachedThumbnail(CachedData):
@@ -190,7 +192,7 @@ class CachedThumbnail(CachedData):
         super().__init__()
         self.data_type = DataType.THUMBNAIL
 
-    def getDataFromDb(self, data_id, extra_data=None):
+    def getDataFromDb(self, data_id, extra_data):
         select = "SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download " \
                  "where thumbnail_id = %s"
         size = extra_data.get("size")
@@ -205,7 +207,7 @@ class CachedThumbnail(CachedData):
             return dm.Thumbnail(data_id, None, size, False)
         return result_obj
 
-    def getDataFromYTM(self, data_id, extra_data=None):
+    def getDataFromYTM(self, data_id, extra_data):
         return self.getDataFromDb(data_id, extra_data)
 
 
@@ -214,10 +216,10 @@ class CachedAlbum(CachedData):
         super().__init__()
         self.data_type = DataType.ALBUM
 
-    def getDataFromDb(self, data_id, extra_data=None):
+    def getDataFromDb(self, data_id, extra_data):
         return None
 
-    def getDataFromYTM(self, data_id, extra_data=None):
+    def getDataFromYTM(self, data_id, extra_data):
         return None
 
 
@@ -226,10 +228,10 @@ class CachedArtist(CachedData):
         super().__init__()
         self.data_type = DataType.ARTIST
 
-    def getDataFromDb(self, data_id, extra_data=None):
+    def getDataFromDb(self, data_id, extra_data):
         return None
 
-    def getDataFromYTM(self, data_id, extra_data=None):
+    def getDataFromYTM(self, data_id, extra_data):
         return None
 
 
@@ -240,12 +242,18 @@ album_cache = CachedAlbum()
 artist_cache = CachedArtist()
 
 
-def getAllPlaylists(ignore_cache):
+def getAllPlaylists(ignore_cache=False):
     return library_cache.getData('mine', ignore_cache)
 
 
-def getPlaylist(playlist_id, ignore_cache):
-    return playlist_cache.getData(playlist_id, ignore_cache)
+def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True):
+    extra = {"json": get_json}
+    return playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra, do_additional_processing=find_dupes)
+
+
+def getPlaylistFromCache(playlist_id, get_json=True):
+    extra = {"json": get_json}
+    return playlist_cache.getDataFromDb(playlist_id, extra_data=extra)
 
 
 def getThumbnail(thumbnail_id, ignore_cache=False, size=None):
@@ -257,9 +265,9 @@ def getThumbnail(thumbnail_id, ignore_cache=False, size=None):
                                    extra_data=extra_data)
 
 
-def getAlbum(album_id, ignore_cache):
+def getAlbum(album_id, ignore_cache=False):
     return album_cache.getData(album_id, ignore_cache)
 
 
-def getArtist(artist_id, ignore_cache):
+def getArtist(artist_id, ignore_cache=False):
     return artist_cache.getData(artist_id, ignore_cache)

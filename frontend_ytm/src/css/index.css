@@ -5,6 +5,7 @@
 .dupe {
     background-color: rgba(256, 0, 0, .4);
 }
+
 .ant-pagination {
     position: sticky!important;
     top: 116px;

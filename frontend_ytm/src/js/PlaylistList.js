@@ -1,14 +1,19 @@
 /**
  * Page displaying all of my playlists. Click a playlist to view all the songs it contains
  */
-import React from 'react';
-import {Link, useNavigate} from "@reach/router";
+import React, {useMemo} from 'react';
+import {useNavigate} from "@reach/router";
 import {Button, PageHeader, Table} from "antd";
 import {SyncOutlined} from "@ant-design/icons"
 import Thumbnail from "./Thumbnail";
 
 export default function PlaylistList(props) {
     let nav = useNavigate();
+
+    let playlists = useMemo(() => {
+        return props.playlists.filter((pl) => pl.playlistId !== "LM")
+    }, [props.playlists])
+
     // define the columns for the list of playlists
     const columns = [
         {
@@ -69,7 +74,7 @@ export default function PlaylistList(props) {
 
             {/*Table with all the playlists*/}
             <Table columns={columns}
-                   dataSource={props.playlists}
+                   dataSource={playlists}
                    pagination={{defaultPageSize: 100}}
                    sortDirections={["ascend", "descend"]}
                    rowKey={"playlistId"}

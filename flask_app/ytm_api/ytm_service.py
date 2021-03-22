@@ -1,5 +1,8 @@
 """Contains code that interacts with the Youtube Music API"""
-from db.ytm_db_service import getPlaylistSongsFromDb
+from cache import cache_service
+from db import ytm_db_service
+from db.data_models import ActionType
+from db.ytm_db_service import getPlaylistSongsFromDb, persistSongActionFromIds
 from ytm_api.ytm_client import getYTMClient
 
 
@@ -9,7 +12,7 @@ def isSuccessFromYTM(resp):
     :param resp:
     :return:
     """
-    return resp == "STATUS_SUCCEEDED"
+    return resp == "STATUS_SUCCEEDED" or resp.get("status", None) == "STATUS_SUCCEEDED"
 
 
 def isAlreadyInPlaylistResp(resp):
@@ -45,7 +48,7 @@ def updateSongIdListsFromResponse(song_ids, resp, success_ids, already_there_ids
         song_ids = list(song_ids)
 
     if isSuccessFromYTM(resp):
-        success_ids.extend(song_ids)
+        success_ids.extend(resp.get("playlistEditResults"))
     elif isAlreadyInPlaylistResp(resp):
         already_there_ids.extend(song_ids)
     else:
@@ -88,17 +91,35 @@ def addSongsToPlaylist(playlist_id, song_ids):
     for dupe in dupe_list:
         resp = getYTMClient().add_playlist_items(playlist_id, [dupe])
         updateSongIdListsFromResponse([dupe], resp, success_ids, already_there_ids, failure_ids)
+
+    persistSongActionFromIds(playlist_id, [x["videoId"] for x in success_ids], through_ytm=False, success=True, action_type=ActionType.ADD_SONG)
+    persistSongActionFromIds(playlist_id, already_there_ids + failure_ids, through_ytm=False, success=False,
+                             action_type=ActionType.ADD_SONG)
     return success_ids, already_there_ids, failure_ids
 
 
-def removeSongsFromPlaylist(playlist_id, song_ids):
+def removeSongsFromPlaylist(playlist_id, songs):
     """
     Removes the given songs from the given playlist
     :param playlist_id:
-    :param song_ids:
+    :param songs:
     :return:
     """
-    resp = getYTMClient().remove_playlist_items(playlist_id, song_ids)
+    try:
+        resp = getYTMClient().remove_playlist_items(playlist_id, songs)
+    except Exception as e:
+        # most likely cause: one or more of the songs are no longer in the playlise
+        # refresh that playlist
+        cache_service.getPlaylist(playlist_id, ignore_cache=True)
+        raise e
+    song_ids = [s["videoId"] for s in songs]
+    if isSuccessFromYTM(resp):
+        ytm_db_service.deleteSongsFromPlaylistInDb(playlist_id, [s["setVideoId"] for s in songs])
+        persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False, success=True,
+                                 action_type=ActionType.REMOVE_SONG)
+    else:
+        persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False, success=True,
+                                 action_type=ActionType.REMOVE_SONG)
     return resp
 
 
@@ -116,6 +137,6 @@ def findDuplicatesAndAddFlag(tracks):
         if vid_id in id_set:
             duplicate_list.append((next_track["videoId"], next_track["setVideoId"]))
             # add this flag so the frontend can highlight duplicates
-            next_track["is_dupe"] = True
+            next_track["isDupe"] = True
         id_set.add(vid_id)
     return duplicate_list

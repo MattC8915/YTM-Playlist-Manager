@@ -67,4 +67,17 @@ create table if not exists playlist_song_duplicates(
     playlist_id varchar references playlist(id) on delete cascade,
     song_id varchar references song(id) on delete cascade,
     set_video_id varchar
-)
+);
+
+create type action_type as enum('add_song', 'remove_song', 'create_playlist', 'delete_playlist') ;
+
+create table playlist_action_log(
+    action_type action_type not null,
+    timestamp int,
+    done_through_ytm boolean,
+    was_success boolean,
+    playlist_id varchar references playlist(id) null,
+    playlist_name varchar null,
+    song_id varchar references song(id) null,
+    song_name varchar null
+);

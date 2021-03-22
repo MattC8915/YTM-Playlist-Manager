@@ -1,8 +1,8 @@
 """Initializes a Youtube Music api client."""
 import os
 
+# from ytmusicapi import YTMusic
 from ytmusicapi import YTMusic
-
 ytmusic: YTMusic = None
 
 """
