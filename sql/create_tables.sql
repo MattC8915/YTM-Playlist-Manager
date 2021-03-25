@@ -35,7 +35,8 @@ create table if not exists song(
     album_id varchar references album(id),
     length varchar,
     explicit boolean,
-    is_local boolean
+    is_local boolean,
+    is_available boolean
 );
 
 create table if not exists artist_songs(
@@ -54,7 +55,7 @@ create table if not exists songs_in_playlist(
     primary key (playlist_id, set_video_id)
 );
 
-create type data_type as enum ('playlist', 'song', 'album', 'artist', 'thumbnail', 'library');
+create type data_type as enum ('playlist', 'song', 'album', 'artist', 'thumbnail', 'library', 'history');
 
 create table if not exists data_cache(
     data_id varchar,
@@ -80,4 +81,10 @@ create table playlist_action_log(
     playlist_name varchar null,
     song_id varchar references song(id) null,
     song_name varchar null
+);
+
+create table listening_history(
+    song_id varchar references song(id),
+    listen_timestamp int,
+    listen_order serial primary key
 );

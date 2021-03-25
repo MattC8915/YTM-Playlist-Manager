@@ -6,6 +6,7 @@ from enum import Enum
 
 from db import data_models as dm
 from db.db_service import executeSQLFetchOne, executeSQL
+from db.listening_history import getSongsInHistoryFromDb, getHistoryAsPlaylist, persistHistory
 from db.ytm_db_service import getPlaylistsFromDb, persistAllPlaylists, getPlaylistSongsFromDb, persistPlaylistSongs, \
     getNumSongsInPlaylist
 from log import logMessage
@@ -20,6 +21,7 @@ class DataType(Enum):
     cache_time is the number of days an item will be cached before it is invalidated
     """
     PLAYLIST = ("playlist", 1)
+    HISTORY = ("history", .5)
     LIBRARY = ("library", 1)
     SONG = ("song", 30)
     ARTIST = ("artist", 7)
@@ -83,6 +85,7 @@ class CachedData:
         Get data. Either from the database or YTM.
         We use the api if ignore_cache is true OR the cache for this item has been invalidated.
         Items in the cache are invalidated when a certain amount of time has gone by, specified in the DataType enum
+        :param do_additional_processing:
         :param extra_data:
         :param data_id:
         :param ignore_cache:
@@ -173,14 +176,20 @@ class CachedPlaylist(CachedData):
 
     def getDataFromDb(self, data_id, extra_data):
         # get songs from db
-        tracks = getPlaylistSongsFromDb(data_id, convert_to_json=False)
-        playlist_obj: dm.Playlist = getPlaylistsFromDb(convert_to_json=False, playlist_id=data_id)
-        playlist_obj.songs = tracks
+        if data_id == "history":
+            playlist_obj = getHistoryAsPlaylist(limit=200, use_cache=True)
+        else:
+            tracks = getPlaylistSongsFromDb(data_id, convert_to_json=False)
+            playlist_obj: dm.Playlist = getPlaylistsFromDb(convert_to_json=False, playlist_id=data_id)
+            playlist_obj.songs = tracks
         return playlist_obj.to_json() if extra_data.get("json") else playlist_obj
 
     def getDataFromYTM(self, data_id, extra_data):
         # get songs from YTM
-        resp = getYTMClient().get_playlist(data_id, limit=10000)
+        if data_id == "history":
+            resp = getHistoryAsPlaylist(limit=200, use_cache=False)
+        else:
+            resp = getYTMClient().get_playlist(data_id, limit=10000)
         playlist_obj = dm.Playlist.from_json(resp)
         # persist them
         persistPlaylistSongs(data_id, playlist_obj.songs)
@@ -235,15 +244,34 @@ class CachedArtist(CachedData):
         return None
 
 
+class CachedHistory(CachedData):
+    def __init__(self):
+        super().__init__()
+        self.data_type = DataType.HISTORY
+
+    def getDataFromDb(self, data_id, extra_data):
+        return getHistoryAsPlaylist(limit=200, use_cache=True)
+
+    def getDataFromYTM(self, data_id, extra_data):
+        history_playlist = getHistoryAsPlaylist(use_cache=False)
+        persistHistory(history_playlist.songs)
+
+
 library_cache = CachedLibrary()
 playlist_cache = CachedPlaylist()
 thumbnail_cache = CachedThumbnail()
 album_cache = CachedAlbum()
 artist_cache = CachedArtist()
+history_cache = CachedHistory()
 
 
 def getAllPlaylists(ignore_cache=False):
-    return library_cache.getData('mine', ignore_cache)
+    return library_cache.getData("mine", ignore_cache)
+
+
+def getHistory(ignore_cache=False, get_json=True):
+    history = history_cache.getData("history", ignore_cache)
+    return history if not get_json else history.to_json()
 
 
 def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True):
