@@ -1,0 +1,14 @@
+venv
+headers_auth.json
+yarn.lock
+raw_headers.txt
+flask_app/__pycache__
+flask_app/ytm_api/__pycache__/
+flask_app/images/*.png
+frontend_ytm/build/
+frontend_ytm/node_modules/
+frontend_ytm/npm-debug.log
+logs/
+npm-debug.log     
+flask_app/cache/__pycache__/
+flask_app/db/__pycache__/
