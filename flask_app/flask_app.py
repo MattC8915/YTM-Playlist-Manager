@@ -91,7 +91,8 @@ def getPlaylistEndpoint(playlist_id):
     :return:
     """
     ignore_cache = shouldIgnoreCache(request_args=request.args)
-    result = cs.getPlaylist(playlist_id, ignore_cache)
+    result = cs.getHistory(ignore_cache=ignore_cache, get_json=True) if playlist_id == "history" \
+        else cs.getPlaylist(playlist_id=playlist_id, ignore_cache=ignore_cache)
     return httpResponse(result)
 
 

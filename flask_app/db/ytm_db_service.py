@@ -2,10 +2,13 @@
 from datetime import datetime
 from typing import List
 
+import psycopg2
+
 from cache import cache_service
 from db import data_models as dm
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
-from log import logException
+from log import logException, logMessage
+from ytm_api.ytm_service import getSongsFromYTM
 
 
 def getArtistId(name):
@@ -56,20 +59,21 @@ def persistAllSongData(songs_to_add, playlist_id):
                 logException(e)
 
         # persist the song
-        insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local) " \
-                      "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_id_key DO NOTHING "
+        insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local, is_available) " \
+                      "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_id_key DO NOTHING "
         song_data = song.to_db()
         executeSQL(insert_song, song_data)
 
-        # persist the song/playlist relationship
-        insert_song_playlist = "INSERT INTO songs_in_playlist " \
-                               "(playlist_id, song_id, set_video_id, datetime_added, index) " \
-                               "VALUES (%s, %s, %s, %s, %s) " \
-                               "ON CONFLICT ON CONSTRAINT songs_in_playlist_pkey " \
-                               "DO NOTHING " \
-                               # "DO UPDATE SET index=excluded.index"
-        isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
-        executeSQL(insert_song_playlist, isp_data)
+        if song.set_video_id and playlist_id:
+            # persist the song/playlist relationship
+            insert_song_playlist = "INSERT INTO songs_in_playlist " \
+                                   "(playlist_id, song_id, set_video_id, datetime_added, index) " \
+                                   "VALUES (%s, %s, %s, %s, %s) " \
+                                   "ON CONFLICT ON CONSTRAINT songs_in_playlist_pkey " \
+                                   "DO NOTHING " \
+                                   # "DO UPDATE SET index=excluded.index"
+            isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
+            executeSQL(insert_song_playlist, isp_data)
 
         # persist the song/artist relationships
         insert_song_artist = "INSERT INTO artist_songs (song_id, artist_id) VALUES (%s, %s) " \
@@ -236,40 +240,36 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     return playlist_objs[0] if playlist_id else playlist_objs
 
 
-def getSongFromDb(song_id, playlist_id, include_song_playlists):
-    # TODO what happens when we run this query for song_id and that song is in multiple playlists
+def getSongsFromDb(song_id, playlist_id, include_song_playlists):
+    if not song_id and not playlist_id:
+        return []
     # use inner join if getting songs from a playlist because we only want songs that are in songs_in_playlist
     # use left join if getting a specific song because we don't care if the song is in songs_in_playlist
-    sip_join = "inner" if playlist_id else "left"
     # noinspection SqlResolve
     select = f"SELECT s.id, s.name, alb.name, alb.id, alb.thumbnail_id, " \
-             f"s.length, s.explicit, s.is_local, sip.set_video_id, sip.index " \
+             f"s.length, s.explicit, s.is_local, s.is_available " \
+             f"{', sip.set_video_id, sip.index ' if playlist_id else ''}" \
              f"FROM song as s " \
-             f"left join album as alb on s.album_id=alb.id " \
-             f"{sip_join} join songs_in_playlist as sip on s.id=sip.song_id "
-    data = ()
-    if song_id:
-        select += " AND s.id = %s"
-        data += song_id,
+             f"left join album as alb on s.album_id=alb.id "
     if playlist_id:
-        select += " AND sip.playlist_id = %s"
+        # sip_join = "inner" if playlist_id else "left"
+        select += " inner join songs_in_playlist as sip on s.id=sip.song_id "
+    data = ()
+    if song_id and isinstance(song_id, str):
+        select += " WHERE s.id = %s"
+        data += song_id,
+    elif song_id and isinstance(song_id, list):
+        select += " WHERE s.id in %s"
+        data += tuple(song_id),
+    if playlist_id:
+        select += f" {'AND' if song_id else 'WHERE'} sip.playlist_id = %s"
         data += playlist_id,
-    select += " order by sip.index"
+        select += " order by sip.index"
     result = executeSQLFetchAll(select, data)
-    return [dm.Song.from_db(r, include_playlists=include_song_playlists) for r in result]
-
-
-def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
-    """
-    Get all the songs that belong to a playlist from the db
-    :param playlist_id:
-    :param convert_to_json:
-    :return:
-    """
-    song_lst = getSongFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True)
-    song_ids = {s.video_id for s in song_lst}
+    song_lst = [dm.Song.from_db(r, include_playlists=include_song_playlists) for r in result]
 
     # find the artists for each song
+    song_ids = {s.video_id for s in song_lst}
     select_artists = "SELECT a.id, a.name, a.thumbnail_id, ass.song_id " \
                      "from artist as a, artist_songs as ass " \
                      "WHERE a.id = ass.artist_id " \
@@ -286,6 +286,16 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     for next_song in song_lst:
         artists = artist_song_dict.get(next_song.video_id, [])
         next_song.artists = artists
+    return song_lst
+
+def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
+    """
+    Get all the songs that belong to a playlist from the db
+    :param playlist_id:
+    :param convert_to_json:
+    :return:
+    """
+    song_lst = getSongsFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True)
 
     return song_lst if not convert_to_json else [s.to_json() for s in song_lst]
 
@@ -304,7 +314,7 @@ def flattenList(parent_list):
 def persistSongActionFromIds(playlist_id, songs_ids: List[str], through_ytm, success, action_type):
     # TODO next this also needs to record the setVideoId of each song
     playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
-    songs = [getSongFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in songs_ids]
+    songs = [getSongsFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in songs_ids]
     songs = flattenList(songs)
     persistSongAction(playlist, songs, through_ytm, success, action_type)
 
@@ -321,4 +331,12 @@ def persistPlaylistAction(playlist_action: 'dm.PlaylistActionLog'):
              " playlist_name, song_id, song_name) " \
              "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
     data = playlist_action.to_db()
-    executeSQL(insert, data)
+    try:
+        executeSQL(insert, data)
+    except Exception as e:
+        if "playlist_action_log_song_id_fkey" in str(e):
+            logMessage(f"Song doesn't exist in db. Getting data from YTM for song [{playlist_action.song_id}]")
+            # get the song data from YTM and insert into song table
+            song = getSongsFromYTM(playlist_action.song_id)
+            persistAllSongData(song, None)
+            executeSQL(insert, data)

@@ -1,8 +1,7 @@
 """Contains code that interacts with the Youtube Music API"""
 from cache import cache_service
+from db import data_models
 from db import ytm_db_service
-from db.data_models import ActionType
-from db.ytm_db_service import getPlaylistSongsFromDb, persistSongActionFromIds
 from ytm_api.ytm_client import getYTMClient
 
 
@@ -72,7 +71,7 @@ def addSongsToPlaylist(playlist_id, song_ids):
     song_id_set = set(song_ids)
 
     # Get all songs already in the playlist (by looking in the db)
-    all_playlist_song_ids = {song.video_id for song in getPlaylistSongsFromDb(playlist_id)}
+    all_playlist_song_ids = {song.video_id for song in ytm_db_service.getPlaylistSongsFromDb(playlist_id)}
 
     # find songs from the list that are NOT in this playlist already
     songs_not_in_playlist = song_id_set.difference(all_playlist_song_ids)
@@ -92,10 +91,25 @@ def addSongsToPlaylist(playlist_id, song_ids):
         resp = getYTMClient().add_playlist_items(playlist_id, [dupe])
         updateSongIdListsFromResponse([dupe], resp, success_ids, already_there_ids, failure_ids)
 
-    persistSongActionFromIds(playlist_id, [x["videoId"] for x in success_ids], through_ytm=False, success=True, action_type=ActionType.ADD_SONG)
-    persistSongActionFromIds(playlist_id, already_there_ids + failure_ids, through_ytm=False, success=False,
-                             action_type=ActionType.ADD_SONG)
+    ytm_db_service.persistSongActionFromIds(playlist_id, [x["videoId"] for x in success_ids], through_ytm=False,
+                                            success=True, action_type=data_models.ActionType.ADD_SONG)
+    ytm_db_service.persistSongActionFromIds(playlist_id, already_there_ids + failure_ids, through_ytm=False,
+                                            success=False, action_type=data_models.ActionType.ADD_SONG)
     return success_ids, already_there_ids, failure_ids
+
+
+def getSongsFromYTM(song_ids):
+    if isinstance(song_ids, str):
+        song_ids = [song_ids]
+    songs = [data_models.Song.from_json(getYTMClient().get_song(sid)) for sid in song_ids]
+    return songs if len(songs) > 1 else songs[0]
+
+
+def getSongsInHistoryFromYTM(get_json):
+    return [
+        data_models.Song.from_json(s, include_playlists=True, index=index) if not get_json else s
+        for index, s in enumerate(getYTMClient().get_history())
+    ]
 
 
 def removeSongsFromPlaylist(playlist_id, songs):
@@ -115,11 +129,11 @@ def removeSongsFromPlaylist(playlist_id, songs):
     song_ids = [s["videoId"] for s in songs]
     if isSuccessFromYTM(resp):
         ytm_db_service.deleteSongsFromPlaylistInDb(playlist_id, [s["setVideoId"] for s in songs])
-        persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False, success=True,
-                                 action_type=ActionType.REMOVE_SONG)
+        ytm_db_service.persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False,
+                                                success=True, action_type=data_models.ActionType.REMOVE_SONG)
     else:
-        persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False, success=True,
-                                 action_type=ActionType.REMOVE_SONG)
+        ytm_db_service.persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False,
+                                                success=True, action_type=data_models.ActionType.REMOVE_SONG)
     return resp
 
 

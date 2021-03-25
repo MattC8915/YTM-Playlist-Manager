@@ -2,10 +2,11 @@ import {useEffect, useState, useCallback, useReducer} from "react";
 import {useHttp} from "./util/hooks/UseHttp";
 import {useReducerWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {Router} from "@reach/router"
-import Playlist from "./Playlist";
-import PlaylistList from "./PlaylistList";
 import {toast, ToastContainer} from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
+import {Menu} from "antd"
+import {OrderedListOutlined, EditOutlined, HistoryOutlined} from "@ant-design/icons"
+import {useNavigate} from "@reach/router";
 import {MyToastContext} from "./util/context/MyToastContext";
 import {
     ADD_SONGS,
@@ -15,6 +16,9 @@ import {
     SET_PLAYLISTS,
     SET_SONGS, SORT_SONGS
 } from "./util/context/PlaylistContext";
+import ListenHistory from "./pages/ListenHistory";
+import PlaylistList from "./pages/PlaylistList";
+import Playlist from "./pages/Playlist";
 
 export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
@@ -25,8 +29,8 @@ function App() {
     let [libraryData, playlistsDispatch] = useReducer(playlistReducer, {"playlists": [], "songs": {}});
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
-
-
+    let [navKey, setNavKey] = useState("library")
+    let nav = useNavigate()
     /**
      * Helper function to add a unicode character at the beginning of a string
      * @type {function(*=, *): (string|any)}
@@ -114,6 +118,23 @@ function App() {
         }
     }, [loadPlaylists, loadedPlaylists, setLoadedPlaylists])
 
+    function handleMenuClick(e) {
+        setNavKey(e.key)
+        switch (e.key) {
+            case "library":
+                nav("/")
+                break;
+            case "history":
+                nav("/history")
+                break;
+            case "actionlog":
+                nav("/log")
+                break;
+            default:
+                break;
+        }
+    }
+
     return (
       <div>
           <PlaylistContext.Provider value={{library: libraryData, addSongs: addSongsToPlaylist,
@@ -130,11 +151,29 @@ function App() {
                   pauseOnFocusLoss
                   draggable
                   pauseOnHover/>
+
+              <Menu onClick={handleMenuClick}
+                    selectedKeys={[navKey]}
+                    mode={"horizontal"}>
+                  <Menu.Item key={"library"} icon={<OrderedListOutlined/>}>
+                      Library
+                  </Menu.Item>
+                  <Menu.Item key={"history"} icon={<HistoryOutlined/>}>
+                      Listen History
+                  </Menu.Item>
+                  <Menu.Item key={"actionlog"} icon={<EditOutlined/>}>
+                      {/*<AuditOutlined />*/}
+                      {/*<FileTextOutlined />*/}
+                      {/*<EditOutlined />*/}
+                      Log
+                  </Menu.Item>
+              </Menu>
               <Router>
                 <PlaylistList path={"/"}
                               playlists={libraryData.playlists}
                               loadPlaylists={loadPlaylists}
                 />
+                <ListenHistory path={"/history"}/>
                 <Playlist path={"/songs/:playlistId"}/>
               </Router>
           </MyToastContext.Provider>

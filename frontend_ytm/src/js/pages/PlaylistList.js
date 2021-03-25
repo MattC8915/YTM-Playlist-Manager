@@ -5,7 +5,7 @@ import React, {useMemo} from 'react';
 import {useNavigate} from "@reach/router";
 import {Button, PageHeader, Table} from "antd";
 import {SyncOutlined} from "@ant-design/icons"
-import Thumbnail from "./Thumbnail";
+import Thumbnail from "../components/Thumbnail";
 
 export default function PlaylistList(props) {
     let nav = useNavigate();

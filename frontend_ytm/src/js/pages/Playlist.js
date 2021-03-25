@@ -6,17 +6,16 @@
  */
 import React from 'react';
 import {useMemo, useCallback, useEffect, useState, useContext} from "react";
-import {useHttp} from "./util/hooks/UseHttp";
 import {Badge, Button, Input, PageHeader, Popover, Table} from "antd";
-import {useStateWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {useNavigate} from "@reach/router";
-import {MyToastContext} from "./util/context/MyToastContext";
-import {ERROR_TOAST, SUCCESS_TOAST} from "./App";
 import {MinusSquareOutlined, SyncOutlined} from "@ant-design/icons";
 import debounce from "lodash/debounce" ;
-import {cloneDeep, groupSongsByAlbum, PlaylistContext} from "./util/context/PlaylistContext";
-import Thumbnail from "./Thumbnail";
 import Checkbox from "antd/lib/checkbox/Checkbox";
+import {ERROR_TOAST, SUCCESS_TOAST} from "../App";
+import {groupSongsByAlbum, PlaylistContext} from "../util/context/PlaylistContext";
+import {MyToastContext} from "../util/context/MyToastContext";
+import {useHttp} from "../util/hooks/UseHttp";
+import Thumbnail from "../components/Thumbnail";
 
 
 export function songsExist(playlist) {
@@ -24,6 +23,7 @@ export function songsExist(playlist) {
 }
 
 export default function Playlist(props) {
+    const cloneDeep = require("lodash.clonedeep");
     let playlistContext = useContext(PlaylistContext);
     let toastContext = useContext(MyToastContext);
     let [fetchedSongs, setFetchedSongs] = useState(false);
@@ -37,7 +37,7 @@ export default function Playlist(props) {
     let playlistId = props.playlistId
 
     let [searchFilter, setSearchFilter] = useState("")
-    let [showPlaylistOptions, setShowPlaylistOptions] = useState(false);
+    let [showAddToPlaylistPopup, setShowAddToPlaylistPopup] = useState(false);
     let [filteringByDupes, setFilteringByDupes] = useState(false);
     let nav = useNavigate();
 
@@ -45,6 +45,7 @@ export default function Playlist(props) {
     let playlist = useMemo(() => {
         return library.playlists.find((pl) => pl.playlistId === playlistId)  || {"songs": []}
     }, [library.playlists, playlistId])
+
     /**
      * Removes the given songs from the given playlist
      * Each songObject must have a videoId and setVideoId property
@@ -118,7 +119,7 @@ export default function Playlist(props) {
             }
         }
         return songs || [];
-    }, [playlist, library.songs, playlistId, removeSongsFromPlaylist])
+    }, [playlist, cloneDeep, library.songs, playlistId, removeSongsFromPlaylist])
 
 
     /**
@@ -428,7 +429,7 @@ export default function Playlist(props) {
                 }
             })
             .finally(() => {
-                setShowPlaylistOptions(false)
+                setShowAddToPlaylistPopup(false)
             })
     }
 
@@ -526,9 +527,9 @@ export default function Playlist(props) {
                     content={popoverContent}
                     title={"Add to playlist"}
                     trigger={"click"}
-                    visible={showPlaylistOptions}
+                    visible={showAddToPlaylistPopup}
                     placement={"bottom"}
-                    onVisibleChange={() => setShowPlaylistOptions(!showPlaylistOptions)}>
+                    onVisibleChange={() => setShowAddToPlaylistPopup(!showAddToPlaylistPopup)}>
                     <Button
                         type={'primary'}
                         style={{margin: '0 50px 0 10px'}}
