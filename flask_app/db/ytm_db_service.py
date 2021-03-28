@@ -338,7 +338,7 @@ def persistPlaylistAction(playlist_action: 'dm.PlaylistActionLog'):
         executeSQL(insert, data)
     except Exception as e:
         if "playlist_action_log_song_id_fkey" in str(e):
-            logMessage(f"Song doesn't exist in db. Getting data from YTM for song [{playlist_action.song_id}]")
+            logMessage(f"Song doesn't exist in db. Getting data from YTM for song [{playlist_action.song_name}: {playlist_action.song_id}]")
             # get the song data from YTM and insert into song table
             song = getSongsFromYTM(playlist_action.song_id)
             persistAllSongData(song, None)

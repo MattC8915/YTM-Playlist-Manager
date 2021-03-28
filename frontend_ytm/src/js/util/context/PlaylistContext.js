@@ -188,7 +188,7 @@ export function playlistReducer(existingData, action) {
     if (songsExist(playlist)) {
         let idSet = new Set();
         playlist.songs.forEach((s) => idSet.add(s.setVideoId))
-        if (idSet.size !== playlist.songs.length) {
+        if (idSet.size !== playlist.songs.length && playlistId !== "history") {
             console.log(`3. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
         }
     }

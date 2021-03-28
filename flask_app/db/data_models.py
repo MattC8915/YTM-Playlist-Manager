@@ -164,7 +164,7 @@ class Album:
         self.thumbnail = thumbnail
 
     def __str__(self):
-        return self.name
+        return self.name if self.name else "<untitled>"
 
     def to_db(self):
         return self.album_id, self.name, self.thumbnail.thumbnail_id
@@ -266,7 +266,7 @@ class Song:
 
     def to_json(self):
         return {"videoId": self.video_id, "setVideoId": self.set_video_id, "title": self.title, "index": self.index,
-                "album": self.album.to_json(), "isAvailable": self.is_available,
+                "album": self.album.to_json() if self.album else {}, "isAvailable": self.is_available,
                 "artists": [a.to_json() for a in self.artists],
                 "playlists": [sip.to_json() for sip in self.playlists],
                 "duration": self.duration, "isExplicit": self.explicit, "is_local": self.local}

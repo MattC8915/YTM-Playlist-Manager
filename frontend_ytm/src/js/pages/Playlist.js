@@ -83,7 +83,7 @@ export default function Playlist(props) {
         if (songsExist(playlist)) {
             let idSet = new Set();
             playlist.songs.forEach((s) => idSet.add(s.setVideoId))
-            if (idSet.size !== playlist.songs.length) {
+            if (idSet.size !== playlist.songs.length && playlistId !== "history") {
                 console.log(`1. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
             }
         }
@@ -114,7 +114,7 @@ export default function Playlist(props) {
         if (songs.length > 0) {
             let idSet = new Set();
             songs.forEach((s) => idSet.add(s.setVideoId))
-            if (idSet.size !== playlist.songs.length) {
+            if (idSet.size !== playlist.songs.length && playlistId !== "history") {
                 console.log(`2. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
             }
         }
@@ -564,7 +564,7 @@ export default function Playlist(props) {
                     pageSizeOptions: [100, 1000, 10000],
                     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
                 }
-                rowKey={"id"}
+                rowKey={"index"}
                 size={"small"}
                 rowSelection={{
                     selectedRowKeys: selectedRowIds,

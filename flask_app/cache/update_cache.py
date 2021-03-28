@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from cache.cache_service import getPlaylist, getAllPlaylists
+from cache.cache_service import getPlaylist, getAllPlaylists, getHistory
 from db.data_models import Thumbnail
 from db.db_service import executeSQL, executeSQLFetchAll
 
@@ -72,10 +72,15 @@ def updatePlaylists(playlist_id=None):
             time.sleep(60)
 
 
+def updateListenHistory():
+    getHistory(ignore_cache=True)
+
+
 def updateData():
     setupCustomLogger("update")
     updatePlaylists()
     downloadImages()
+    updateListenHistory()
 
 
 if __name__ == '__main__':
