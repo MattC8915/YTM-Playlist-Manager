@@ -33,6 +33,7 @@ export default function Playlist(props) {
     let [isDataLoading, setIsDataLoading] = useState(false);
     let [albumView, setAlbumView] = useState(false);
     let [hideSingles, setHideSingles] = useState(true);
+    let [hideAlbums, setHideAlbums] = useState(false);
 
     let playlistId = props.playlistId
 
@@ -161,10 +162,13 @@ export default function Playlist(props) {
             if (hideSingles) {
                 albums = albums.filter((album) => album.children.length > 1)
             }
+            if (hideAlbums) {
+                albums = albums.filter((album) => album.children.length === 1)
+            }
             return albums;
         }
         return filtered
-    }, [playlistSongs, albumView, hideSingles, filteringByDupes, searchFilter])
+    }, [playlistSongs, albumView, hideSingles, hideAlbums, filteringByDupes, searchFilter])
 
     let duplicateSongs = useMemo(() => {
         // search for duplicates in the list of songs
@@ -190,11 +194,12 @@ export default function Playlist(props) {
             songs =  playlistSongs.filter((song) => selectedRowIds.includes(song.id))
         }
         if (albumView && includeAlbums) {
-            let albums = playlist.albumView.filter((album) => selectedRowIds.includes(album.id))
+            console.log("filtered", filteredSongs)
+            let albums = filteredSongs.filter((album) => selectedRowIds.includes(album.id))
             songs.push(...albums)
         }
         return songs
-    }, [albumView, playlist.albumView, playlistSongs, selectedRowIds])
+    }, [albumView, filteredSongs, playlistSongs, selectedRowIds])
 
 
     /**
@@ -477,6 +482,8 @@ export default function Playlist(props) {
                 title={(
                     <div>{playlist && playlist.title ? playlist.title : ""}
                         {" "}
+                        <small>({playlistSongs.length} songs)</small>
+                        {" "}
                         <Button className={"refresh-button"}
                                 onClick={() => fetchSongs(true)}>
                             <SyncOutlined />
@@ -488,9 +495,10 @@ export default function Playlist(props) {
                             </Button>
                         )}
                         <Button type={"primary"}
-                            style={{marginLeft: "50px"}}
-                            onClick={() => setSelectedRowIds([])}>
-                            De-select All
+                                style={{marginLeft: "50px"}}
+                                disabled={selectedRowIds.length === 0}
+                                onClick={() => setSelectedRowIds([])}>
+                            De-select All ({selectedRowIds.length})
                         </Button>
                         <Checkbox
                             checked={albumView}
@@ -505,6 +513,15 @@ export default function Playlist(props) {
                                 onChange={() => setHideSingles(!hideSingles)}>
                                 <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
                                     Hide Singles
+                                </div>
+                            </Checkbox>
+                        )}
+                        {albumView && (
+                            <Checkbox
+                                checked={hideAlbums}
+                                onChange={() => setHideAlbums(!hideAlbums)}>
+                                <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
+                                    Hide Albums
                                 </div>
                             </Checkbox>
                         )}
@@ -564,7 +581,7 @@ export default function Playlist(props) {
                     pageSizeOptions: [100, 1000, 10000],
                     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
                 }
-                rowKey={"index"}
+                rowKey={"id"}
                 size={"small"}
                 rowSelection={{
                     selectedRowKeys: selectedRowIds,
@@ -586,7 +603,6 @@ export default function Playlist(props) {
                             newSelectedRowIds.push(...newChildrenIds)
                             console.log(newSelectedRowIds)
                         }
-
                         // if I just deselected an album - deselect all its songs
                         let removedAlbums = getSelectedSongs(true, false)
                             .filter((row) => !row.setVideoId && !newSelectedRowIds.includes(row.id))
