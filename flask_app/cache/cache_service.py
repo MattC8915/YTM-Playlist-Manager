@@ -255,6 +255,7 @@ class CachedHistory(CachedData):
     def getDataFromYTM(self, data_id, extra_data):
         history_playlist = getHistoryAsPlaylist(use_cache=False)
         persistHistory(history_playlist.songs)
+        return history_playlist
 
 
 library_cache = CachedLibrary()

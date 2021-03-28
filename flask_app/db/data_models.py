@@ -60,6 +60,8 @@ def createThumbnailUrl(thumbnail_id: str, size: int):
 
 def getThumbnailUrl(json_obj, size=None):
     thumbnails = json_obj.get("thumbnails", [])
+    if not thumbnails:
+        thumbnails = [json_obj.get("album", {}).get("thumbnail", {})]
     thumbnail = next((t.get("url") for t in thumbnails if t.get("width") == size), None)
     if not thumbnail and thumbnails:
         thumbnail = next((t.get("url") for t in thumbnails))
@@ -141,8 +143,9 @@ class Playlist:
         name = playlist_json.get("title")
         tracks = playlist_json.get("tracks", [])
         num_songs = playlist_json.get("count")
+        songs = [Song.from_json(track, include_playlists=True, index=index) for index, track in enumerate(tracks)]
         return cls(plid=pl_id, name=name, thumbnail=thumbnail,
-                   songs=[Song.from_json(track, True, index) for index, track in enumerate(tracks)],
+                   songs=songs,
                    last_updated=datetime.now(), num_songs=num_songs)
 
     def to_json(self):
@@ -161,7 +164,7 @@ class Album:
         self.thumbnail = thumbnail
 
     def __str__(self):
-        return self.name
+        return self.name if self.name else "<untitled>"
 
     def to_db(self):
         return self.album_id, self.name, self.thumbnail.thumbnail_id
@@ -198,8 +201,12 @@ class Artist:
 
     @classmethod
     def from_json(cls, artist_json):
-        artist_id = artist_json.get("id")
-        artist_name = artist_json.get("name")
+        if isinstance(artist_json, str):
+            artist_id = None
+            artist_name = artist_json
+        else:
+            artist_id = artist_json.get("id")
+            artist_name = artist_json.get("name")
         # noinspection PyTypeChecker
         return cls(artist_id, artist_name, None)
 
@@ -259,7 +266,7 @@ class Song:
 
     def to_json(self):
         return {"videoId": self.video_id, "setVideoId": self.set_video_id, "title": self.title, "index": self.index,
-                "album": self.album.to_json(), "isAvailable": self.is_available,
+                "album": self.album.to_json() if self.album else {}, "isAvailable": self.is_available,
                 "artists": [a.to_json() for a in self.artists],
                 "playlists": [sip.to_json() for sip in self.playlists],
                 "duration": self.duration, "isExplicit": self.explicit, "is_local": self.local}
@@ -294,13 +301,15 @@ class Song:
         is_local = song_json.get("is_local", False)
         played = song_json.get("played", False)
         thumbnail: Thumbnail = Thumbnail.from_json(song_json, size=60)
-        album = Album.from_json(song_json["album"], thumbnail)
+        album_json = song_json.get("album", None)
+        album = Album.from_json(album_json, thumbnail) if album_json else None
         return cls(vid_id=vid_id, title=title, artists=artists, album=album, length=length, explicit=explicit,
                    local=is_local, set_vid_id=set_vid_id, include_playlists=include_playlists, index=index,
                    is_available=is_available, played=played)
 
     def to_db(self):
-        tup = (self.video_id, self.title, self.album.album_id, self.duration, self.explicit, self.local, self.is_available)
+        album_id = self.album.album_id if self.album else None
+        tup = (self.video_id, self.title, album_id, self.duration, self.explicit, self.local, self.is_available)
         return tup
 
 
