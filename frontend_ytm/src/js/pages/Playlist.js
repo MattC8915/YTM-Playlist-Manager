@@ -84,7 +84,7 @@ export default function Playlist(props) {
             let idSet = new Set();
             playlist.songs.forEach((s) => idSet.add(s.setVideoId))
             if (idSet.size !== playlist.songs.length) {
-                console.log("HEEEYY")
+                console.log(`1. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
             }
         }
         let songs = playlist.songs.map((playlistSong) => {
@@ -115,7 +115,7 @@ export default function Playlist(props) {
             let idSet = new Set();
             songs.forEach((s) => idSet.add(s.setVideoId))
             if (idSet.size !== playlist.songs.length) {
-                console.log("HEEEYY")
+                console.log(`2. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
             }
         }
         return songs || [];
@@ -143,10 +143,10 @@ export default function Playlist(props) {
                 value = value.toLowerCase().trim();
                 if (value && value.trim()) {
                     filtered = filtered.filter((song) => {
-                        return song.title.toString().toLowerCase().includes(value) ||
-                            song.artistsString.toString().toLowerCase().includes(value) ||
-                            song.albumString.toString().toLowerCase().includes(value) ||
-                            song.playlistsString.toString().toLowerCase().includes(value)
+                        return (song.title && song.title.toString().toLowerCase().includes(value)) ||
+                            (song.artistsString && song.artistsString.toString().toLowerCase().includes(value)) ||
+                            (song.albumString && song.albumString.toString().toLowerCase().includes(value)) ||
+                            (song.playlistsString && song.playlistsString.toString().toLowerCase().includes(value))
                     });
                     filtered.forEach((s) => filteredSet.add(s))
                 }

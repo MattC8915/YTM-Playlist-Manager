@@ -189,7 +189,7 @@ export function playlistReducer(existingData, action) {
         let idSet = new Set();
         playlist.songs.forEach((s) => idSet.add(s.setVideoId))
         if (idSet.size !== playlist.songs.length) {
-            console.log("HEEEYY")
+            console.log(`3. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
         }
     }
     // reformat song objects - create strings for album, artist and playlist.

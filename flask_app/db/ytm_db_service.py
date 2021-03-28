@@ -71,7 +71,7 @@ def persistAllSongData(songs_to_add, playlist_id):
                                    "VALUES (%s, %s, %s, %s, %s) " \
                                    "ON CONFLICT ON CONSTRAINT songs_in_playlist_pkey " \
                                    "DO NOTHING " \
-                                   # "DO UPDATE SET index=excluded.index"
+                # "DO UPDATE SET index=excluded.index"
             isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
             executeSQL(insert_song_playlist, isp_data)
 
@@ -240,7 +240,7 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     return playlist_objs[0] if playlist_id else playlist_objs
 
 
-def getSongsFromDb(song_id, playlist_id, include_song_playlists):
+def getSongsFromDb(song_id, playlist_id, include_song_playlists, get_json=False):
     if not song_id and not playlist_id:
         return []
     # use inner join if getting songs from a playlist because we only want songs that are in songs_in_playlist
@@ -286,7 +286,10 @@ def getSongsFromDb(song_id, playlist_id, include_song_playlists):
     for next_song in song_lst:
         artists = artist_song_dict.get(next_song.video_id, [])
         next_song.artists = artists
+    if get_json:
+        song_lst = [s.to_json() for s in song_lst]
     return song_lst
+
 
 def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     """
