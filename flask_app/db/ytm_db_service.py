@@ -5,9 +5,7 @@ from typing import List
 import psycopg2
 
 from cache import cache_service
-from cache.cache_service import getPlaylist
 from db import data_models as dm
-from db.data_models import ActionType
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 from log import logException, logMessage
 from ytm_api.ytm_service import getSongsFromYTM
@@ -315,9 +313,9 @@ def flattenList(parent_list):
 
 
 def deletePlaylistFromDb(playlist_id, through_ytm):
-    playlist = getPlaylist(playlist_id)
+    playlist = cache_service.getPlaylist(playlist_id)
     # persist changes in playlist_action_log
-    persistSongAction(playlist, playlist.songs, through_ytm, success=True, action_type=ActionType.REMOVE_SONG)
+    persistSongAction(playlist, playlist.songs, through_ytm, success=True, action_type=dm.ActionType.REMOVE_SONG)
     persistDeletePlaylistAction(playlist_id, playlist.name, through_ytm)
 
     # delete from db
@@ -327,7 +325,7 @@ def deletePlaylistFromDb(playlist_id, through_ytm):
 
 
 def persistDeletePlaylistAction(playlist_id, playlist_name, through_ytm):
-    action = dm.PlaylistActionLog(ActionType.DELETE_PLAYLIST, datetime.now().timestamp(), through_ytm, True,
+    action = dm.PlaylistActionLog(dm.ActionType.DELETE_PLAYLIST, datetime.now().timestamp(), through_ytm, True,
                                   playlist_id, playlist_name, None, None)
     persistPlaylistAction(action)
 
