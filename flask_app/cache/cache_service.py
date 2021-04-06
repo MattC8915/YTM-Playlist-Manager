@@ -8,7 +8,7 @@ from db import data_models as dm
 from db.db_service import executeSQLFetchOne, executeSQL
 from db.listening_history import getSongsInHistoryFromDb, getHistoryAsPlaylist, persistHistory
 from db.ytm_db_service import getPlaylistsFromDb, persistAllPlaylists, getPlaylistSongsFromDb, persistPlaylistSongs, \
-    getNumSongsInPlaylist
+    getNumSongsInPlaylist, deletePlaylist, deletePlaylistFromDb
 from log import logMessage
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
 from ytm_api.ytm_service import findDuplicatesAndAddFlag
@@ -115,7 +115,7 @@ class CachedData:
             self.updateCache(data_id)
             return resp
         except Exception as e:
-            # catch exception here because that's what is thrown ...
+            # catch generic Exception here because that's what is thrown ...
             if "403" in str(e) or "has no attribute" in str(e):
                 setupYTMClient()
                 return self.getDataFromYTM(data_id, extra_data)
@@ -277,7 +277,13 @@ def getHistory(ignore_cache=False, get_json=True):
 
 def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True):
     extra = {"json": get_json}
-    return playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra, do_additional_processing=find_dupes)
+    try:
+        data = playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra, do_additional_processing=find_dupes)
+    except Exception as e:
+        if "404" in str(e):
+            print(f"404 received for playlist {playlist_id} .. DELETING")
+            deletePlaylistFromDb(playlist_id, through_ytm=False)
+
 
 
 def getPlaylistFromCache(playlist_id, get_json=True):

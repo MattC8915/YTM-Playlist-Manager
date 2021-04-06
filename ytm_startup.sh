@@ -5,8 +5,8 @@ cd ~/python/ytm_playlist_manager/ || exit;
 echo "PULLING FROM GIT"
 git pull origin main;
 
-echo "CREATING DB TABLES"
-psql -d ytm < ~/python/ytm_playlist_manager/sql/create_tables.sql
+#echo "CREATING DB TABLES"
+#psql -d ytm < ~/python/ytm_playlist_manager/sql/create_tables.sql
 
 echo "KILLING TMUX"
 tmux kill-session -t react_ytm

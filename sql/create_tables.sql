@@ -14,25 +14,25 @@ create table if not exists thumbnail_download(
 create table if not exists playlist (
     id varchar unique,
     name varchar,
-    thumbnail_id varchar references thumbnail(id) on delete cascade
+    thumbnail_id varchar references thumbnail(id) on delete set null
 );
 
 create table if not exists artist (
     id varchar unique,
     name varchar,
-    thumbnail_id varchar references thumbnail(id) on delete cascade
+    thumbnail_id varchar references thumbnail(id) on delete set null
 );
 
 create table if not exists album (
     id varchar unique,
     name varchar,
-    thumbnail_id varchar references thumbnail(id) on delete cascade
+    thumbnail_id varchar references thumbnail(id) on delete set null
 );
 
 create table if not exists song(
     id varchar unique,
     name varchar,
-    album_id varchar references album(id),
+    album_id varchar references album(id) on delete set null,
     length varchar,
     explicit boolean,
     is_local boolean,
@@ -77,7 +77,7 @@ create table playlist_action_log(
     timestamp int,
     done_through_ytm boolean,
     was_success boolean,
-    playlist_id varchar references playlist(id) null,
+    playlist_id varchar references playlist(id) on delete set null null,
     playlist_name varchar null,
     song_id varchar references song(id) null,
     song_name varchar null

@@ -77,17 +77,10 @@ export default function Playlist(props) {
     }, [playlistContext, sendRequest, toastContext])
 
     /**
-     * Get the song objects for this playlist.
+     * Get the song objects for this playlist. Set playlist-dependent properties like index, setVideoId and isDupe.
      * And create the render object for every other playlist it belongs to
      */
     let playlistSongs = useMemo(() => {
-        if (songsExist(playlist)) {
-            let idSet = new Set();
-            playlist.songs.forEach((s) => idSet.add(s.setVideoId))
-            if (idSet.size !== playlist.songs.length && playlistId !== "history") {
-                console.log(`1. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
-            }
-        }
         let songs = playlist.songs.map((playlistSong) => {
             let canonSong = cloneDeep(library.songs[playlistSong.videoId])
             if (undefined === playlistSong.index) {
@@ -102,6 +95,7 @@ export default function Playlist(props) {
                 .map((song_in_playlist) => {
                     return (
                         <div key={song_in_playlist.playlistId}>
+                            {/*Provide a button for every playlist (besides this one) that allows the user to remove this song from that playlist*/}
                             <MinusSquareOutlined onClick={() => {
                                 // noinspection JSIgnoredPromiseFromCall
                                 removeSongsFromPlaylist(song_in_playlist.playlistId, [song_in_playlist])
@@ -112,13 +106,6 @@ export default function Playlist(props) {
                 });
             return canonSong;
         })
-        if (songs.length > 0) {
-            let idSet = new Set();
-            songs.forEach((s) => idSet.add(s.setVideoId))
-            if (idSet.size !== playlist.songs.length && playlistId !== "history") {
-                console.log(`2. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
-            }
-        }
         return songs || [];
     }, [playlist, cloneDeep, library.songs, playlistId, removeSongsFromPlaylist])
 

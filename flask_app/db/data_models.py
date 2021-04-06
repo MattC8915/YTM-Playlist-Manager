@@ -328,7 +328,7 @@ class ActionType(Enum):
 class PlaylistActionLog:
     def __init__(self, action_type, timestamp, done_through_ytm, succeeded, playlist_id, playlist_name,
                  song_id, song_name):
-        self.action_type = action_type
+        self.action_type: ActionType = action_type
         self.timestamp = timestamp
         self.done_through_ytm = done_through_ytm
         self.succeeded = succeeded

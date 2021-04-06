@@ -5,7 +5,9 @@ from typing import List
 import psycopg2
 
 from cache import cache_service
+from cache.cache_service import getPlaylist
 from db import data_models as dm
+from db.data_models import ActionType
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 from log import logException, logMessage
 from ytm_api.ytm_service import getSongsFromYTM
@@ -118,8 +120,6 @@ def persistPlaylistSongs(playlist_id, new_songs: 'List[dm.Song]'):
 
     # get Song objects for existing songs in the database
     existing_songs = getPlaylistSongsFromDb(playlist_id)
-    # TODO next setVideoIds are duplicated all the time!! What if song A was removed and song B was added
-    #  but it was given the same setVideoId
     # get ids for new and existing songs
     existing_song_ids = {(s.video_id, s.set_video_id) for s in existing_songs}
     new_song_ids = {(s.video_id, s.set_video_id) for s in new_songs}
@@ -314,6 +314,24 @@ def flattenList(parent_list):
     return flat_list
 
 
+def deletePlaylistFromDb(playlist_id, through_ytm):
+    playlist = getPlaylist(playlist_id)
+    # persist changes in playlist_action_log
+    persistSongAction(playlist, playlist.songs, through_ytm, success=True, action_type=ActionType.REMOVE_SONG)
+    persistDeletePlaylistAction(playlist_id, playlist.name, through_ytm)
+
+    # delete from db
+    delete = "DELETE FROM playlist where id = %s"
+    data = playlist_id,
+    executeSQL(delete, data)
+
+
+def persistDeletePlaylistAction(playlist_id, playlist_name, through_ytm):
+    action = dm.PlaylistActionLog(ActionType.DELETE_PLAYLIST, datetime.now().timestamp(), through_ytm, True,
+                                  playlist_id, playlist_name, None, None)
+    persistPlaylistAction(action)
+
+
 def persistSongActionFromIds(playlist_id, songs_ids: List[str], through_ytm, success, action_type):
     # TODO next this also needs to record the setVideoId of each song
     playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
@@ -338,7 +356,8 @@ def persistPlaylistAction(playlist_action: 'dm.PlaylistActionLog'):
         executeSQL(insert, data)
     except Exception as e:
         if "playlist_action_log_song_id_fkey" in str(e):
-            logMessage(f"Song doesn't exist in db. Getting data from YTM for song [{playlist_action.song_name}: {playlist_action.song_id}]")
+            logMessage(
+                f"Song doesn't exist in db. Getting data from YTM for song [{playlist_action.song_name}: {playlist_action.song_id}]")
             # get the song data from YTM and insert into song table
             song = getSongsFromYTM(playlist_action.song_id)
             persistAllSongData(song, None)

@@ -169,7 +169,7 @@ export function playlistReducer(existingData, action) {
             removeSongsFromPlaylistObject(playlist, payloadSongs, dataCopy.songs)
             break;
         case SORT_SONGS:
-            // let songObjects = payloadSongs.map((songId) => dataCopy.songs[songId])
+            // This is called when the sorting for a playlist changes
             playlist.songs = getSongIds(payloadSongIds);
             break;
         case ADD_SONGS:
@@ -185,16 +185,8 @@ export function playlistReducer(existingData, action) {
         default:
             return dataCopy;
     }
-    if (songsExist(playlist)) {
-        let idSet = new Set();
-        playlist.songs.forEach((s) => idSet.add(s.setVideoId))
-        if (idSet.size !== playlist.songs.length && playlistId !== "history") {
-            console.log(`3. idSet ${idSet.size} doesn't match playlist.songs ${playlist.songs.length}`)
-        }
-    }
     // reformat song objects - create strings for album, artist and playlist.
     if ([ADD_SONGS, SET_SONGS, REMOVE_SONGS].includes(action.type)) {
-        // TODO next the setVideoId for a song is unique to a playlist
         reformatSongObjects(dataCopy.songs)
     }
     return dataCopy;
