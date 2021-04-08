@@ -11,7 +11,7 @@ export default function PlaylistList(props) {
     let nav = useNavigate();
 
     let playlists = useMemo(() => {
-        return props.playlists.filter((pl) => pl.playlistId !== "LM")
+        return props.playlists.filter((pl) => pl.playlistId !== "LM" && pl.playlistId !== "history")
     }, [props.playlists])
 
     // define the columns for the list of playlists

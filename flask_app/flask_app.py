@@ -1,18 +1,28 @@
 """Flask endpoints"""
+import time
+
 import json
 
-from flask import Flask, request, send_file, make_response
+from flask import Flask, request, send_file, make_response, g
 
 from cache import cache_service as cs
-from db import ytm_db_service
-from db.data_models import ActionType
-from db.ytm_db_service import persistSongActionFromIds
 from log import setupCustomLogger, logMessage
 from ytm_api import ytm_service
 
 app = Flask(__name__)
 
 channel_id = "UCrfCekSTtlSSUhchrtKBzcA"
+
+
+@app.before_request
+def before_request():
+    g.start = time.time()
+
+
+@app.teardown_request
+def after_request(err):
+    diff = time.time() - g.start
+    logMessage(f"Request time: [{diff}] for [{request.full_path}]")
 
 
 def httpResponse(json_data, http_code=200):
@@ -58,8 +68,9 @@ def addSongsToPlaylistEndpoint():
     success_ids, already_there_ids, failure_ids = ytm_service.addSongsToPlaylist(playlist_id, songs)
     logMessage(f"Success: {success_ids}\nAlready there: {already_there_ids}\nFailure: {failure_ids}")
     if success_ids:
-        # if some songs succeeded: get updated data for this playlist from YTM
-        cs.getPlaylist(playlist_id, ignore_cache=True)
+        pass
+        # if some songs succeeded: get updated data for this playlist from YTM TODO do this in another thread
+        # cs.getPlaylist(playlist_id, ignore_cache=True)
     if not already_there_ids and not failure_ids:
         return httpResponse({"success": success_ids})
     return httpResponse({"failed": failure_ids, "already_there": already_there_ids, "success": success_ids}, 500)
@@ -110,7 +121,7 @@ def getAllPlaylistsEndpoint():
 @app.route("/images/<image_name>", methods=["GET"])
 def get_image(image_name):
     resp = make_response(send_file(filename_or_fp="./images/" + image_name, mimetype="image/png"))
-    resp.headers['Content-Transfer-Encoding']='base64'
+    resp.headers['Content-Transfer-Encoding'] = 'base64'
     return resp
 
 

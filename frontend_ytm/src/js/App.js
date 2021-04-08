@@ -24,13 +24,16 @@ export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
 export const WARNING_TOAST = "WARNING";
 export const ERROR_TOAST = "ERROR";
+
 function App() {
-    // let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(playlistReducer, {});
-    let [libraryData, playlistsDispatch] = useReducer(playlistReducer, {"playlists": [], "songs": {}});
+    let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
+        "library", playlistReducer, {"playlists": [], "songs": {}});
+    // let [libraryData, playlistsDispatch] = useReducer(playlistReducer, );
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
     let [navKey, setNavKey] = useState("library")
     let nav = useNavigate()
+
     /**
      * Helper function to add a unicode character at the beginning of a string
      * @type {function(*=, *): (string|any)}
@@ -99,24 +102,27 @@ function App() {
      */
     const loadPlaylists = useCallback((forceRefresh) => {
         // console.log("load playlists")
-        return sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
+        sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
                 setPlaylists(resp);
             })
             .catch((error) => {
                 console.log(error);
+                addToast("Error loading library", ERROR_TOAST)
             })
-    }, [sendRequest, setPlaylists])
+    }, [addToast, sendRequest, setPlaylists])
 
 
     useEffect(() => {
         // load the list of playlists from the backend if not done already
-        // console.log("useeffect")
         if (!loadedPlaylists) {
             loadPlaylists()
             setLoadedPlaylists(true);
         }
-    }, [loadPlaylists, loadedPlaylists, setLoadedPlaylists])
+        if (window.location.pathname.includes("/history") && navKey !== "history") {
+            setNavKey("history")
+        }
+    }, [loadPlaylists, loadedPlaylists, navKey, setLoadedPlaylists])
 
     function handleMenuClick(e) {
         setNavKey(e.key)
@@ -162,9 +168,6 @@ function App() {
                       Listen History
                   </Menu.Item>
                   <Menu.Item key={"actionlog"} icon={<EditOutlined/>}>
-                      {/*<AuditOutlined />*/}
-                      {/*<FileTextOutlined />*/}
-                      {/*<EditOutlined />*/}
                       Log
                   </Menu.Item>
               </Menu>

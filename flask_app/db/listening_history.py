@@ -9,33 +9,16 @@ from ytm_api.ytm_client import getYTMClient
 from ytm_api.ytm_service import getSongsInHistoryFromYTM, getSongsFromYTM
 
 
-def getPlayedTimestamp(played):
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    day_delta = 30
-    played = played.lower()
-    if played == "today":
-        day_delta = 0
-    elif played == "yesterday":
-        day_delta = 1
-    elif played == "this week":
-        day_delta = 2
-    elif played == "last week":
-        day_delta = 7
-    else:
-        day_delta = 14
-    return (today - timedelta(days=day_delta)).timestamp()
-
-
 def persistHistoryItem(next_history_item: Song):
-    played_timestamp = getPlayedTimestamp(next_history_item.played)
-    insert = "INSERT INTO listening_history (song_id, listen_timestamp) " \
-             "VALUES (%s, %s)"
-    data = next_history_item.video_id, played_timestamp
+    insert = "INSERT INTO listening_history (song_id) " \
+             "VALUES (%s)"
+    data = next_history_item.video_id,
     try:
         executeSQL(insert, data)
     except Exception as e:
         if "listening_history_song_id_fkey" in str(e):
-            logMessage(f"Song doesn't exist in db. Getting data from YTM for song [{next_history_item.title}: {next_history_item.video_id}]")
+            logMessage(
+                f"Song doesn't exist in db. Getting data from YTM for song [{next_history_item.title}: {next_history_item.video_id}]")
             # get the song data from YTM and insert into song table
             song = getSongsFromYTM(next_history_item.video_id)
             persistAllSongData([song], None)
@@ -102,13 +85,16 @@ def persistHistory(history_items: List[Song]):
 #     # new_history = [r for r in reversed(new_history)]
 #     return new_history
 
+def getHistoryAsPlaylistShell(tracks):
+    return {"playlistId": "history", "title": "History", "tracks": tracks, "count": len(tracks)}
+
 
 def getHistoryAsPlaylist(limit=None, use_cache=False):
     if use_cache:
         tracks = getSongsInHistoryFromDb(limit)
     else:
         tracks = getSongsInHistoryFromYTM(get_json=True)
-    playlist_json = {"playlistId": "history", "title": "History", "tracks": tracks, "count": len(tracks)}
+    playlist_json = getHistoryAsPlaylistShell(tracks)
     return Playlist.from_json(playlist_json)
 
 

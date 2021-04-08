@@ -61,11 +61,9 @@ def updatePlaylists(playlist_id=None):
     if playlist_id:
         getPlaylist(playlist_id, ignore_cache=True)
     else:
-        getAllPlaylists(ignore_cache=True)
-        select = "SELECT id, name FROM playlist"
-        results = executeSQLFetchAll(select, None)
-        for r in results:
-            playlist_id = r[0]
+        playlists = getAllPlaylists(ignore_cache=True)
+        for p in playlists:
+            playlist_id = p.playlist_id
             if playlist_id == "LM":
                 continue
             p = getPlaylist(playlist_id, ignore_cache=True)

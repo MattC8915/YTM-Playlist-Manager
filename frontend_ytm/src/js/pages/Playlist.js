@@ -7,7 +7,7 @@
 import React from 'react';
 import {useMemo, useCallback, useEffect, useState, useContext} from "react";
 import {Badge, Button, Input, PageHeader, Popover, Table} from "antd";
-import {useNavigate} from "@reach/router";
+import {Link, useNavigate} from "@reach/router";
 import {MinusSquareOutlined, SyncOutlined} from "@ant-design/icons";
 import debounce from "lodash/debounce" ;
 import Checkbox from "antd/lib/checkbox/Checkbox";
@@ -68,12 +68,6 @@ export default function Playlist(props) {
                 toastContext.addToast("Successfully removed songs", SUCCESS_TOAST)
                 return resp;
             })
-            .catch((resp) => {
-                console.log("Error removing songs:")
-                console.log(resp)
-                toastContext.addToast("Error removing songs", ERROR_TOAST)
-                return resp;
-            })
     }, [playlistContext, sendRequest, toastContext])
 
     /**
@@ -89,18 +83,23 @@ export default function Playlist(props) {
             canonSong.index = playlistSong.index
             canonSong.setVideoId = playlistSong.setVideoId
             canonSong.isDupe = playlistSong.isDupe
+            if (!canonSong.setVideoId) {
+                // this is necessary because songs in history don't have a setVideoId
+                // (We don't need to worry about duplicate videoIds bc YTM should make sure a song doesn't appear in history twice)
+                playlistSong.setVideoId = playlistSong.videoId;
+            }
             canonSong.id = playlistSong.setVideoId
             canonSong.renderOtherPlaylists = canonSong.playlists
                 .filter((pl) => pl.playlistId !== playlistId)
-                .map((song_in_playlist) => {
+                .map((song_in_playlist, index) => {
                     return (
-                        <div key={song_in_playlist.playlistId}>
+                        <div key={index}>
                             {/*Provide a button for every playlist (besides this one) that allows the user to remove this song from that playlist*/}
                             <MinusSquareOutlined onClick={() => {
                                 // noinspection JSIgnoredPromiseFromCall
                                 removeSongsFromPlaylist(song_in_playlist.playlistId, [song_in_playlist])
                             }}/>
-                            {" "} {song_in_playlist.playlistName}
+                            {" "} <Link to={`/songs/${song_in_playlist.playlistId}`}>{song_in_playlist.playlistName}</Link>
                         </div>
                     )
                 });
@@ -164,7 +163,7 @@ export default function Playlist(props) {
             setFilteringByDupes(false);
         }
         return dupes;
-    }, [playlistSongs])
+    }, [filteringByDupes, playlistSongs])
     /**
      * Returns the song objects that are currently selected
      */
@@ -200,6 +199,9 @@ export default function Playlist(props) {
                 setSelectedRowIds([])
             })
             .catch((resp) => {
+                console.log("Error removing songs:")
+                console.log(resp)
+                toastContext.addToast("Error removing songs", ERROR_TOAST)
                 fetchSongs(true)
             })
     }
@@ -236,12 +238,12 @@ export default function Playlist(props) {
     }, [getSelectedSongs, playlistContext, playlistId, sendRequest, toastContext])
 
     useEffect(() => {
-        if (playlistId && !playlist.fetchedAllSongs && !fetchedSongs) {
+        if (playlistId && !playlist.fetchedAllSongs) {
             // fetch song data from backend if not done already
-            setFetchedSongs(true);
+            playlist.fetchedAllSongs = true;
             fetchSongs();
         }
-    }, [fetchSongs, fetchedSongs, playlist, playlistId])
+    }, [fetchSongs, playlist, playlistId])
 
     /**
      * Called when the user clicks on one of the table headers. This sorts all songs based on the header that was clicked
@@ -407,6 +409,7 @@ export default function Playlist(props) {
                 playlist: selectedPlaylist.playlistId
             }
         }
+        setShowAddToPlaylistPopup(false)
         sendRequest("/addSongs", options)
             .then((resp) => {
                 playlistContext.addSongs(selectedPlaylist.playlistId, resp.success)
@@ -419,9 +422,6 @@ export default function Playlist(props) {
                     playlistContext.addSongs(selectedPlaylist.playlistId, resp.success)
                     displayAddToPlaylistResponseToast(resp)
                 }
-            })
-            .finally(() => {
-                setShowAddToPlaylistPopup(false)
             })
     }
 
@@ -518,14 +518,6 @@ export default function Playlist(props) {
 
             {/*Add / remove buttons*/}
             <div className={"add-remove-button-container"}>
-                {/*Remove button*/}
-                <Button danger
-                        style={{marginLeft: '10px'}}
-                        disabled={selectedRowIds.length === 0}
-                        onClick={removeSelectedRows}>
-                    Remove from playlist
-                </Button>
-                {" "}
                 {/*Add to playlist button*/}
                 <Popover
                     content={popoverContent}
@@ -536,15 +528,24 @@ export default function Playlist(props) {
                     onVisibleChange={() => setShowAddToPlaylistPopup(!showAddToPlaylistPopup)}>
                     <Button
                         type={'primary'}
-                        style={{margin: '0 50px 0 10px'}}
+                        style={{marginLeft: '10px'}}
                         disabled={selectedRowIds.length === 0}>
                         Add to playlist
                     </Button>
                 </Popover>
 
+                {!props.hideRemoveButton &&
+                    // Remove button
+                    <Button danger
+                            style={{margin: '0 0 0 10px'}}
+                            disabled={selectedRowIds.length === 0}
+                            onClick={removeSelectedRows}>
+                        Remove from playlist
+                    </Button>
+                }
                 {/*Search songs in playlist*/}
                 <Input.Search
-                    style={{margin: "0 0 10px 0"}}
+                    style={{margin: "0 0 10px 10px"}}
                     placeholder={"album | artist"}
                     enterButton
                     onSearch={onSearchInputChange}

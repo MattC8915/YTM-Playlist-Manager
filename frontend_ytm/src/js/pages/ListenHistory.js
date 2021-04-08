@@ -1,18 +1,11 @@
-import {PageHeader, Table} from "antd"
-import {useEffect, useState} from "react";
+import React from 'react'
 import Playlist from "./Playlist";
 
 export default function ListenHistory(props) {
-    let [didLoadData, setDidLoadData] = useState(false)
-    let [listenHistory, setListenHistory] = useState([])
-
-    useEffect(() => {
-
-    }, [])
 
     return (
         <div>
-            <Playlist playlistId={"history"}/>
+            <Playlist playlistId={"history"} hideRemoveButton={true}/>
         </div>
     )
 }

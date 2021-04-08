@@ -15,38 +15,66 @@ export const ADD_SONGS = "ADD_SONGS"
 export const REMOVE_SONGS = "REMOVE_SONGS"
 
 
+function getArtistString(songs) {
+    let artistCount = {}
+    songs.forEach((song) => {
+        increaseArtistCount(song.artists, artistCount)
+    })
+    // sort artists by # of appearances
+    let artistsString = Object.entries(artistCount)
+        .sort(([a1, count1], [a2, count2]) => count1 > count2 ? -1 : 1)
+        .map(([artist, count]) => artist)
+        .join(", ");
+    if (artistsString.length > 100) {
+        artistsString = artistsString.substring(0, 100) + "..."
+    }
+    return artistsString
+}
+
 export function groupSongsByAlbum(songs) {
     // TODO next this is broken when an album is null (godfather of harlem includes other loosies)
     let uniqueAlbumIds = [];
     let uniqueAlbums = [];
+    let uniqueArtistNames = [];
     songs.forEach((song) => {
-        if (!uniqueAlbumIds.includes(song.album.id)) {
-            uniqueAlbums.push(song.album)
-            uniqueAlbumIds.push(song.album.id)
+        let albumId = song.album.id;
+        if (albumId) {
+            if (!uniqueAlbumIds.includes(albumId)) {
+                uniqueAlbums.push(song.album)
+                uniqueAlbumIds.push(albumId)
+            }
+        } else {
+            let artistString = getArtistString([song])
+            song.artistString = artistString;
+            if (!uniqueArtistNames.includes(artistString)) {
+                uniqueArtistNames.push(artistString);
+            }
         }
     })
 
-    return uniqueAlbums.map((nextAlbum) => {
+    let albums = uniqueAlbums.map((nextAlbum) => {
         let album = cloneDeep(nextAlbum);
         let songsInAlbum = songs.filter((song) => song.album.id === album.id)
-        let artistCount = {}
-        songsInAlbum.forEach((song) => {
-            increaseArtistCount(song.artists, artistCount)
-        })
-        // determine the artists
-        album.artistsString = Object.entries(artistCount)
-            .sort(([a1, count1], [a2, count2]) => count1 > count2 ? -1 : 1)
-            .map(([artist, count]) => artist)
-            .join(", ");
-        if (album.artistsString.length > 100) {
-            album.artistsString = album.artistsString.substring(0, 100) + "..."
-        }
+        // count how many times an artist appears in the album
+        album.artistsString = getArtistString(songsInAlbum)
         album.albumString = album.name;
         album.children = songsInAlbum;
         album.thumbnail = songsInAlbum[0].thumbnail;
         album.duration = songsInAlbum.length;
         return album;
     });
+    let artists = uniqueArtistNames.map((nextArtist) => {
+        let songsForArtist = songs.filter((song) => song.artistString === nextArtist)
+        let album = {};
+        album.id = nextArtist;
+        album.artistsString = nextArtist;
+        album.children = songsForArtist;
+        album.thumbnail = songsForArtist[0].thumbnail;
+        album.duration = songsForArtist.length;
+        return album;
+    })
+    albums.push(...artists);
+    return albums;
 }
 
 /**

@@ -6,7 +6,8 @@ from enum import Enum
 
 from db import data_models as dm
 from db.db_service import executeSQLFetchOne, executeSQL
-from db.listening_history import getSongsInHistoryFromDb, getHistoryAsPlaylist, persistHistory
+from db.listening_history import getSongsInHistoryFromDb, getHistoryAsPlaylist, persistHistory, \
+    getHistoryAsPlaylistShell
 from db import ytm_db_service as ytmdbs
 from log import logMessage
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
@@ -266,7 +267,9 @@ history_cache = CachedHistory()
 
 
 def getAllPlaylists(ignore_cache=False):
-    return library_cache.getData("mine", ignore_cache)
+    playlists = library_cache.getData("mine", ignore_cache)
+    history = getHistoryAsPlaylistShell([])
+    return playlists + [history]
 
 
 def getHistory(ignore_cache=False, get_json=True):
@@ -280,9 +283,12 @@ def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True)
         data = playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra, do_additional_processing=find_dupes)
     except Exception as e:
         if "404" in str(e):
-            print(f"404 received for playlist {playlist_id} .. DELETING")
+            logMessage(f"404 received for playlist {playlist_id} .. DELETING")
             ytmdbs.deletePlaylistFromDb(playlist_id, through_ytm=False)
-
+            data = playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra, do_additional_processing=find_dupes)
+        else:
+            raise e
+    return data
 
 
 def getPlaylistFromCache(playlist_id, get_json=True):
