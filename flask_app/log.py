@@ -10,7 +10,7 @@ def setupCustomLogger(name):
     global my_logger
     print("Setting up logging .. filename: {0}".format(name))
     # logger settings
-    log_file = os.path.expanduser(f"~/python/ytm_playlist_manager/logs/{name}.log")
+    log_file = os.path.expanduser(f"~/python/playlist_manager/logs/{name}.log")
 
     # 50 Mb
     log_file_max_size = 1024 * 1024 * 50

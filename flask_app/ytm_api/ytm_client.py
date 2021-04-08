@@ -16,8 +16,8 @@ Click on the search button in YTM
 Look at the POST request
 Copy all request headers starting from "accept:" and past this into ./raw_headers.txt
 """
-auth_filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/ytm_api/headers_auth.json")
-raw_header_filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/ytm_api/raw_headers.txt")
+auth_filepath = os.path.expanduser("~/python/playlist_manager/flask_app/ytm_api/headers_auth.json")
+raw_header_filepath = os.path.expanduser("~/python/playlist_manager/flask_app/ytm_api/raw_headers.txt")
 
 
 def getYTMClient():

@@ -23,7 +23,7 @@ def downloadImages():
              "WHERE downloaded=%s"
     data = False,
     results = executeSQLFetchAll(select, data)
-    filepath = os.path.expanduser("~/python/ytm_playlist_manager/flask_app/images/")
+    filepath = os.path.expanduser("~/python/playlist_manager/flask_app/images/")
     logMessage(f"Downloading {len(results)} images")
     for index, r in enumerate(results):
         logMessage(f"Getting image #{index}")
