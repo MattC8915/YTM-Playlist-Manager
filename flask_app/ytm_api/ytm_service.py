@@ -106,11 +106,12 @@ def getSongsFromYTM(song_ids):
 
 
 def getSongsInHistoryFromYTM(get_json):
-    history = getYTMClient().get_history()
-    return [
-        data_models.Song.from_json(s, include_playlists=True, index=index) if not get_json else s
-        for index, s in enumerate(history)
-    ]
+    history_songs = getYTMClient().get_history()
+    return data_models.getListOfSongObjects(history_songs, from_db=False, include_playlists=True, include_index=True)
+    # return [
+    #     data_models.Song.from_json(s, include_playlists=True, index=index) if not get_json else s
+    #     for index, s in enumerate(history_songs)
+    # ]
 
 
 def removeSongsFromPlaylist(playlist_id, songs):

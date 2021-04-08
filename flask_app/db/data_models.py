@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 from cache import cache_service as cs
 from db import ytm_db_service as dbs
+from db.db_service import executeSQLFetchAll
+from db.ytm_db_service import updateDictEntry
 
 
 def createRandomCode():
@@ -143,7 +145,8 @@ class Playlist:
         name = playlist_json.get("title")
         tracks = playlist_json.get("tracks", [])
         num_songs = playlist_json.get("count")
-        songs = [Song.from_json(track, include_playlists=True, index=index) for index, track in enumerate(tracks)]
+        songs = getListOfSongObjects(tracks, from_db=False, include_playlists=True, include_index=True)
+        # songs = [Song.from_json(track, include_playlists=True, index=index) for index, track in enumerate(tracks)]
         return cls(plid=pl_id, name=name, thumbnail=thumbnail,
                    songs=songs,
                    last_updated=datetime.now(), num_songs=num_songs)
@@ -222,7 +225,8 @@ class Artist:
 
 
 class SongInPlaylist:
-    def __init__(self, video_id, set_video_id, index, playlist_id, playlist_name):
+    def __init__(self, sip_tuple):
+        video_id, set_video_id, index, playlist_id, playlist_name = sip_tuple
         self.video_id = video_id
         self.set_video_id = set_video_id
         self.playlist_id = playlist_id
@@ -235,9 +239,53 @@ class SongInPlaylist:
                 "index": self.index}
 
 
+def getListOfSongObjects(source_data, from_db, include_playlists, include_index=False):
+    if include_index:
+        songs = [Song.from_db(s, index) for index, s in enumerate(source_data)] \
+            if from_db else [Song.from_json(s, index) for index, s in enumerate(source_data)]
+    else:
+        songs = [Song.from_db(s) for s in source_data] if from_db else [Song.from_json(s) for s in source_data]
+
+    song_ids = {s.video_id for s in songs}
+    song_id_data = tuple([(s,) for s in song_ids]),
+
+    # get playlist data
+    song_playlist_dict = {}
+    if include_playlists:
+        select = "SELECT sip.song_id, sip.set_video_id, sip.index, p.id, p.name " \
+                 "FROM songs_in_playlist as sip, playlist as p " \
+                 "WHERE sip.playlist_id = p.id " \
+                 "AND sip.song_id in %s"
+        results = dbs.executeSQLFetchAll(select, song_id_data)
+        for r in results:
+            updateDictEntry(song_playlist_dict, r[0], SongInPlaylist(r))
+
+    artist_song_dict = {}
+    if from_db:
+        # get artist data (only do this if from_db, otherwise artist data is already in the json
+        select_artists = "SELECT a.id, a.name, a.thumbnail_id, ass.song_id " \
+                         "from artist as a, artist_songs as ass " \
+                         "WHERE a.id = ass.artist_id " \
+                         "and ass.song_id in %s"
+        artists = executeSQLFetchAll(select_artists, song_id_data) if song_ids else []
+        for artist in artists:
+            song_id = artist[3]
+            artist_obj = Artist.from_db(artist[:3])
+            updateDictEntry(artist_song_dict, song_id, artist_obj)
+    # album, and thumbnail:
+
+    # set playlists, artist, album and thumbnail
+    for next_song in songs:
+        if include_playlists:
+            next_song.playlists = song_playlist_dict.get(next_song.video_id, [])
+        if from_db:
+            next_song.artists = artist_song_dict.get(next_song.video_id, [])
+
+    return songs
+
+
 class Song:
-    def __init__(self, vid_id, title, artists, album, length, explicit, local, set_vid_id, is_available,
-                 include_playlists=False, index=None, played=None):
+    def __init__(self, vid_id, title, artists, album, length, explicit, local, set_vid_id, is_available, index=None):
         self.video_id = vid_id
         self.set_video_id = set_vid_id
         self.title = title
@@ -247,19 +295,8 @@ class Song:
         self.duration = length
         self.explicit = explicit
         self.is_available = is_available
-        self.played = played
         self.local = local or (album and album.album_id and "FEmusic_library_privately_owned_release" in album.album_id)
-        if include_playlists:
-            select = "SELECT sip.song_id, sip.set_video_id, sip.index, p.id, p.name " \
-                     "FROM songs_in_playlist as sip, playlist as p " \
-                     "WHERE sip.playlist_id = p.id " \
-                     "AND sip.song_id = %s"
-            data = self.video_id,
-            results = dbs.executeSQLFetchAll(select, data)
-            self.playlists = [SongInPlaylist(sip_song_id, sip_set_id, sip_index, playlist_id, playlist_name)
-                              for sip_song_id, sip_set_id, sip_index, playlist_id, playlist_name in results]
-        else:
-            self.playlists = []
+        self.playlists = []
 
     def __str__(self):
         return f"{self.title} by {', '.join([str(a) for a in self.artists])} on {self.album}"
@@ -272,22 +309,23 @@ class Song:
                 "duration": self.duration, "isExplicit": self.explicit, "is_local": self.local}
 
     @classmethod
-    def from_db(cls, db_tuple, include_playlists=False):
+    def from_db(cls, db_tuple, index=None):
+        # noinspection PyTypeChecker
         if len(db_tuple) == 11:
             video_id, title, album_name, album_id, thumbnail_id, length, explicit, is_local, is_available, set_video_id, \
-                index = db_tuple
+            index = db_tuple
         else:
             video_id, title, album_name, album_id, thumbnail_id, length, explicit, is_local, is_available = db_tuple
+            index = index
             set_video_id = None
-            index = None
         thumbnail = cs.getThumbnail(thumbnail_id, size=60)
         album = Album(album_id, album_name, thumbnail)
         return cls(vid_id=video_id, title=title, artists=[], album=album, length=length, explicit=explicit,
-                   local=is_local, set_vid_id=set_video_id, include_playlists=include_playlists, index=index,
+                   local=is_local, set_vid_id=set_video_id, index=index,
                    is_available=is_available)
 
     @classmethod
-    def from_json(cls, song_json: dict, include_playlists=False, index=None):
+    def from_json(cls, song_json: dict, index=None):
         vid_id = song_json.get("videoId")
         set_vid_id = song_json.get("setVideoId")
         title = song_json.get("title")
@@ -299,13 +337,12 @@ class Song:
         explicit = song_json.get("isExplicit", False)
         is_available = song_json.get("isAvailable", False)
         is_local = song_json.get("is_local", False)
-        played = song_json.get("played", False)
         thumbnail: Thumbnail = Thumbnail.from_json(song_json, size=60)
         album_json = song_json.get("album", None)
         album = Album.from_json(album_json, thumbnail) if album_json else None
         return cls(vid_id=vid_id, title=title, artists=artists, album=album, length=length, explicit=explicit,
-                   local=is_local, set_vid_id=set_vid_id, include_playlists=include_playlists, index=index,
-                   is_available=is_available, played=played)
+                   local=is_local, set_vid_id=set_vid_id, index=index,
+                   is_available=is_available)
 
     def to_db(self):
         album_id = self.album.album_id if self.album else None

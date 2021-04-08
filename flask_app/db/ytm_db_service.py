@@ -113,6 +113,7 @@ def persistPlaylistSongs(playlist_id, new_songs: 'List[dm.Song]'):
     """
 
     if len(new_songs) > 0 and isinstance(new_songs[0], dict):
+        # noinspection PyTypeChecker
         raise Exception("this shouldn't happen")
         # new_songs = [Song.from_json(s, False) for s in new_songs]
 
@@ -241,7 +242,7 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
 def getSongsFromDb(song_id, playlist_id, include_song_playlists, get_json=False):
     if not song_id and not playlist_id:
         return []
-    # use inner join if getting songs from a playlist because we only want songs that are in songs_in_playlist
+    # use inner join if getting songs from a playlist because we only want songs that are in that playlist
     # use left join if getting a specific song because we don't care if the song is in songs_in_playlist
     # noinspection SqlResolve
     select = f"SELECT s.id, s.name, alb.name, alb.id, alb.thumbnail_id, " \
@@ -264,26 +265,9 @@ def getSongsFromDb(song_id, playlist_id, include_song_playlists, get_json=False)
         data += playlist_id,
         select += " order by sip.index"
     result = executeSQLFetchAll(select, data)
-    song_lst = [dm.Song.from_db(r, include_playlists=include_song_playlists) for r in result]
+    song_lst = dm.getListOfSongObjects(result, from_db=True, include_playlists=include_song_playlists, include_index=False)
+    # song_lst = [dm.Song.from_db(r, include_playlists=include_song_playlists) for r in result]
 
-    # find the artists for each song
-    song_ids = {s.video_id for s in song_lst}
-    select_artists = "SELECT a.id, a.name, a.thumbnail_id, ass.song_id " \
-                     "from artist as a, artist_songs as ass " \
-                     "WHERE a.id = ass.artist_id " \
-                     "and ass.song_id in %s"
-    data = tuple([(s,) for s in song_ids]),
-    artists = executeSQLFetchAll(select_artists, data) if song_ids else []
-    artist_song_dict = {}
-    for artist in artists:
-        song_id = artist[3]
-        artist_obj = dm.Artist.from_db(artist[:3])
-        updateDictEntry(artist_song_dict, song_id, artist_obj)
-
-    # set artists for each song
-    for next_song in song_lst:
-        artists = artist_song_dict.get(next_song.video_id, [])
-        next_song.artists = artists
     if get_json:
         song_lst = [s.to_json() for s in song_lst]
     return song_lst
@@ -297,7 +281,6 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     :return:
     """
     song_lst = getSongsFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True)
-
     return song_lst if not convert_to_json else [s.to_json() for s in song_lst]
 
 
@@ -331,7 +314,6 @@ def persistDeletePlaylistAction(playlist_id, playlist_name, through_ytm):
 
 
 def persistSongActionFromIds(playlist_id, songs_ids: List[str], through_ytm, success, action_type):
-    # TODO next this also needs to record the setVideoId of each song
     playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
     songs = [getSongsFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in songs_ids]
     songs = flattenList(songs)
