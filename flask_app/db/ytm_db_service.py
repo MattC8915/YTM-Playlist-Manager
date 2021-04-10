@@ -8,6 +8,7 @@ from cache import cache_service
 from db import data_models as dm
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
 from log import logException, logMessage
+from util import iterableToDbTuple
 from ytm_api.ytm_service import getSongsFromYTM
 
 
@@ -99,7 +100,7 @@ def deleteSongsFromPlaylistInDb(playlist_id, set_video_ids):
     delete = "DELETE FROM songs_in_playlist " \
              "WHERE playlist_id = %s " \
              "AND set_video_id in %s"
-    delete_data = playlist_id, tuple([(idtd,) for idtd in set_video_ids])
+    delete_data = playlist_id, iterableToDbTuple(set_video_ids)
     executeSQL(delete, delete_data)
 
 
@@ -280,8 +281,8 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     :param convert_to_json:
     :return:
     """
-    song_lst = getSongsFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True)
-    return song_lst if not convert_to_json else [s.to_json() for s in song_lst]
+    song_lst = getSongsFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True, get_json=convert_to_json)
+    return song_lst
 
 
 def flattenList(parent_list):

@@ -101,7 +101,10 @@ def addSongsToPlaylist(playlist_id, song_ids):
 def getSongsFromYTM(song_ids):
     if isinstance(song_ids, str):
         song_ids = [song_ids]
-    songs = [data_models.Song.from_json(getYTMClient().get_song(sid)) for sid in song_ids]
+    # TODO see if it's possible to give multiple song ids.
+    #  (None of the current uses need this)
+    songs_json = [getYTMClient().get_song(sid) for sid in song_ids]
+    songs = data_models.getListOfSongObjects(songs_json, from_db=False, include_playlists=False, include_index=False)
     return songs if len(songs) > 1 else songs[0]
 
 

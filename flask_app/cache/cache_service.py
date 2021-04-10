@@ -5,11 +5,12 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from db import data_models as dm
-from db.db_service import executeSQLFetchOne, executeSQL
-from db.listening_history import getSongsInHistoryFromDb, getHistoryAsPlaylist, persistHistory, \
+from db.db_service import executeSQLFetchOne, executeSQL, executeSQLFetchAll
+from db.listening_history import getHistoryAsPlaylist, persistHistory, \
     getHistoryAsPlaylistShell
 from db import ytm_db_service as ytmdbs
 from log import logMessage
+from util import iterableToDbTuple
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
 from ytm_api.ytm_service import findDuplicatesAndAddFlag
 
@@ -35,6 +36,7 @@ class DataType(Enum):
         return entry
 
 
+# noinspection PyTypeChecker
 class CachedData:
     """
     Abstract class that provides access to a cached piece of data (playlist, song, etc)
@@ -100,6 +102,10 @@ class CachedData:
             data = self.getDataFromDb(data_id, extra_data)
         return self.additionalDataProcessing(data) if do_additional_processing else data
 
+    def getDataListFromDb(self, data_ids, extra_data=None, do_additional_processing=False):
+        data = self.getListFromDb(data_ids, extra_data if extra_data else {})
+        return self.additionalDataProcessing(data) if do_additional_processing else data
+
     def getDataFromYTMWrapper(self, data_id, extra_data=None):
         """
         Get data from YTM. If there's an authentication error this attempts to re-setup the ytm client.
@@ -134,6 +140,9 @@ class CachedData:
     def getDataFromDb(self, data_id, extra_data):
         raise NotImplementedError("something wrong")
 
+    def getListFromDb(self, data_ids, extra_data):
+        raise NotImplementedError("something wrong2")
+
     def getDataFromYTM(self, data_id, extra_data):
         raise NotImplementedError("uh oh")
 
@@ -142,6 +151,9 @@ class CachedLibrary(CachedData):
     """
     Provides db and api access to my library (my list of playlists)
     """
+
+    def getListFromDb(self, data_ids, extra_data):
+        pass
 
     def __init__(self):
         super().__init__()
@@ -164,6 +176,9 @@ class CachedPlaylist(CachedData):
     """
     Provides db and api access to a playlist
     """
+
+    def getListFromDb(self, data_ids, extra_data):
+        pass
 
     def __init__(self):
         super().__init__()
@@ -216,11 +231,31 @@ class CachedThumbnail(CachedData):
             return dm.Thumbnail(data_id, None, size, False)
         return result_obj
 
+    def getListFromDb(self, data_ids: list, extra_data):
+        select = "SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download " \
+                 "where thumbnail_id in %s"
+        size = extra_data.get("size", None)
+        data = iterableToDbTuple(data_ids),
+        if size:
+            select += " and size = %s"
+            data += size,
+        result = executeSQLFetchAll(select, data)
+        all_thumbnails = []
+        for r in result:
+            data_ids.remove(r[0])
+            all_thumbnails.append(dm.Thumbnail.from_db(r))
+        for not_found in data_ids:
+            all_thumbnails.append(dm.Thumbnail(not_found, None, size, False))
+        return all_thumbnails
+
     def getDataFromYTM(self, data_id, extra_data):
         return self.getDataFromDb(data_id, extra_data)
 
 
 class CachedAlbum(CachedData):
+    def getListFromDb(self, data_ids, extra_data):
+        pass
+
     def __init__(self):
         super().__init__()
         self.data_type = DataType.ALBUM
@@ -233,6 +268,9 @@ class CachedAlbum(CachedData):
 
 
 class CachedArtist(CachedData):
+    def getListFromDb(self, data_ids, extra_data):
+        pass
+
     def __init__(self):
         super().__init__()
         self.data_type = DataType.ARTIST
@@ -245,6 +283,9 @@ class CachedArtist(CachedData):
 
 
 class CachedHistory(CachedData):
+    def getListFromDb(self, data_ids, extra_data):
+        pass
+
     def __init__(self):
         super().__init__()
         self.data_type = DataType.HISTORY
@@ -285,7 +326,8 @@ def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True)
         if "404" in str(e):
             logMessage(f"404 received for playlist {playlist_id} .. DELETING")
             ytmdbs.deletePlaylistFromDb(playlist_id, through_ytm=False)
-            data = playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra, do_additional_processing=find_dupes)
+            data = playlist_cache.getData(playlist_id, ignore_cache, extra_data=extra,
+                                          do_additional_processing=find_dupes)
         else:
             raise e
     return data
@@ -294,6 +336,11 @@ def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True)
 def getPlaylistFromCache(playlist_id, get_json=True):
     extra = {"json": get_json}
     return playlist_cache.getDataFromDb(playlist_id, extra_data=extra)
+
+
+def getListOfThumbnails(thumbnail_ids, size=None):
+    extra_data = {} if not size else {"size": size}
+    return thumbnail_cache.getDataListFromDb(thumbnail_ids, extra_data)
 
 
 def getThumbnail(thumbnail_id, ignore_cache=False, size=None):

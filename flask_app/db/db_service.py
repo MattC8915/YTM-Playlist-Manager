@@ -2,6 +2,8 @@
 from psycopg2._psycopg import connection, cursor as psy_curs, OperationalError, InternalError
 from psycopg2.pool import ThreadedConnectionPool, PoolError
 
+from log import logException
+
 ytm_cursor: psy_curs = None
 ytm_conn: connection = None
 db_conn_pool: ThreadedConnectionPool = None
@@ -77,6 +79,7 @@ def executeSQL(query, data=None, should_retry=True):
             cursor.connection.commit()
             return ret_val
         except (OperationalError, InternalError) as e:
+            logException(e)
             if not should_retry:
                 raise e
             return executeSQL(query, data, should_retry=False)
@@ -97,6 +100,7 @@ def executeSQLFetchOne(query, data, should_retry=True):
             cursor.connection.commit()
             return fetch
         except (OperationalError, InternalError) as e:
+            logException(e)
             if not should_retry:
                 raise e
             return executeSQLFetchOne(query, data, should_retry=False)
@@ -121,6 +125,7 @@ def executeSQLFetchAll(query, data, should_retry=True):
             cursor.connection.commit()
             return fetch
         except (OperationalError, InternalError) as e:
+            logException(e)
             if not should_retry:
                 raise e
             return executeSQLFetchAll(query, data, should_retry=False)
