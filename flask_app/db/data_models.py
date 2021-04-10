@@ -247,20 +247,19 @@ class SongInPlaylist:
 
 
 def getListOfSongObjects(source_data, from_db, include_playlists, include_index=False):
-    logMessage(f"Getting list of songs length {len(source_data)}")
     if not source_data:
         return []
 
+    logMessage(f"Getting list of songs length {len(source_data)}")
     if include_index:
         songs: List[Song] = [Song.from_db(s, index) for index, s in enumerate(source_data)] \
             if from_db else [Song.from_json(s, index) for index, s in enumerate(source_data)]
     else:
         songs: List[Song] = [Song.from_db(s) for s in source_data] if from_db else [Song.from_json(s) for s in source_data]
-    logMessage("Done creating objects")
+    # logMessage("Done creating objects")
     song_id_to_source_data = {}
     song_ids = set()
     song_id_data = []
-    # TODO add thumbnails and albums. Should thumbnails be associated with songs instead of albums?
     thumbnail_ids = set()
     thumbnail_id_to_song = {}
     for index, next_song in enumerate(songs):
@@ -272,7 +271,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
         song_id_to_source_data[next_song.video_id] = source_data[index]
     song_id_data = tuple(song_id_data),
     thumbnail_ids = list(thumbnail_ids)
-    logMessage("Done creating id lists")
+    # logMessage("Done creating id lists")
 
     # get playlist data
     song_playlist_dict = {}
@@ -284,7 +283,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
         playlists = dbs.executeSQLFetchAll(select, song_id_data)
         for next_playlist in playlists:
             updateDictEntry(song_playlist_dict, next_playlist[0], SongInPlaylist(next_playlist))
-    logMessage("Done getting playlists")
+    # logMessage("Done getting playlists")
 
     song_artist_dict = {}
     # get artist data (only do this if from_db, otherwise artist data is already in the json
@@ -298,7 +297,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
             song_id = next_artist[3]
             artist_obj = Artist.from_db(next_artist[:3])
             updateDictEntry(song_artist_dict, song_id, artist_obj)
-    logMessage("Done getting artists")
+    # logMessage("Done getting artists")
 
     # get thumbnail data, then create album objects for each song
     thumbnails: List[Thumbnail] = cs.getListOfThumbnails(thumbnail_ids, size=60)
@@ -311,7 +310,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
                 else album
             s.album = album
             last_album_id = s.album_id
-    logMessage("Done getting thumbnails")
+    # logMessage("Done getting thumbnails")
 
     # set playlists, artist
     for next_song in songs:

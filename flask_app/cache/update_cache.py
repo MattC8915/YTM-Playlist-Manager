@@ -59,9 +59,9 @@ def downloadImages():
 
 def updatePlaylists(playlist_id=None):
     if playlist_id:
-        getPlaylist(playlist_id, ignore_cache=True)
+        getPlaylist(playlist_id, ignore_cache=True, get_json=False)
     else:
-        playlists = getAllPlaylists(ignore_cache=True)
+        playlists = getAllPlaylists(ignore_cache=True, get_json=False)
         for p in playlists:
             playlist_id = p.playlist_id
             if playlist_id == "LM":

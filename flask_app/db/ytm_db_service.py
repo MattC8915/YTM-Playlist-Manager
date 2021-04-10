@@ -104,33 +104,31 @@ def deleteSongsFromPlaylistInDb(playlist_id, set_video_ids):
     executeSQL(delete, delete_data)
 
 
-def persistPlaylistSongs(playlist_id, new_songs: 'List[dm.Song]'):
+def persistPlaylistSongs(playlist_obj):
     """
     This is called after I get all the songs that are in a playlist from the YTM api.
     Deletes any songs that are no longer in the playlist since the last time I checked. And persists any new ones.
-    :param playlist_id:
-    :param new_songs:
+    :param playlist_obj:
     :return:
     """
-
-    if len(new_songs) > 0 and isinstance(new_songs[0], dict):
-        # noinspection PyTypeChecker
-        raise Exception("this shouldn't happen")
-        # new_songs = [Song.from_json(s, False) for s in new_songs]
+    logMessage(f"Persisting songs to db for playlist [{playlist_obj.name}]")
+    new_songs = playlist_obj.songs
+    playlist_id = playlist_obj.playlist_id
 
     # get Song objects for existing songs in the database
     existing_songs = getPlaylistSongsFromDb(playlist_id)
+
     # get ids for new and existing songs
     existing_song_ids = {(s.video_id, s.set_video_id) for s in existing_songs}
     new_song_ids = {(s.video_id, s.set_video_id) for s in new_songs}
-    playlist_obj = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
 
+    # find which songs to add/update/delete
     song_ids_to_delete = existing_song_ids.difference(new_song_ids)
     song_ids_to_add = new_song_ids.difference(existing_song_ids)
     song_ids_to_update = existing_song_ids.intersection(new_song_ids)
 
+    # delete songs from songs_in_playlist that have been removed
     if song_ids_to_delete:
-        # delete entries in songs_in_playlist for songs that were removed from the playlist
         set_video_ids_to_delete = [s[1] for s in song_ids_to_delete]
         deleteSongsFromPlaylistInDb(playlist_id, set_video_ids_to_delete)
         songs_to_delete = [song for song in new_songs
@@ -144,8 +142,10 @@ def persistPlaylistSongs(playlist_id, new_songs: 'List[dm.Song]'):
         persistAllSongData(songs_to_add, playlist_id)
         persistSongAction(playlist_obj, songs_to_add, through_ytm=True, success=True,
                           action_type=dm.ActionType.ADD_SONG)
+
     # Check if the index of the song needs to be updated
     if song_ids_to_update:
+        # TODO - optimization - this could be done in one SQL query
         set_video_ids_to_update = [s[1] for s in song_ids_to_update]
         for set_video_id in set_video_ids_to_update:
             existing_song_to_update = next((s for s in existing_songs if s.set_video_id == set_video_id))

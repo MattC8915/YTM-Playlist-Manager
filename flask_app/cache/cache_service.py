@@ -160,16 +160,18 @@ class CachedLibrary(CachedData):
         self.data_type = DataType.LIBRARY
 
     def getDataFromDb(self, data_id, extra_data):
-        resp = ytmdbs.getPlaylistsFromDb(convert_to_json=True)
+        get_json = extra_data.get("json", False)
+        resp = ytmdbs.getPlaylistsFromDb(convert_to_json=get_json)
         return resp
 
     def getDataFromYTM(self, data_id, extra_data):
+        get_json = extra_data.get("json", False)
         playlist_list = getYTMClient().get_library_playlists(limit=100)
         playlist_objs = [dm.Playlist.from_json(pl) for pl in playlist_list]
         ytmdbs.persistAllPlaylists(playlist_objs)
         for pl_obj in playlist_objs:
             pl_obj.num_songs = ytmdbs.getNumSongsInPlaylist(pl_obj.playlist_id)
-        return [pl.to_json() for pl in playlist_objs]
+        return [pl.to_json() for pl in playlist_objs] if get_json else playlist_objs
 
 
 class CachedPlaylist(CachedData):
@@ -190,25 +192,27 @@ class CachedPlaylist(CachedData):
         return data
 
     def getDataFromDb(self, data_id, extra_data):
+        get_json = extra_data.get("json")
         # get songs from db
         if data_id == "history":
-            playlist_obj = getHistoryAsPlaylist(limit=200, use_cache=True)
+            playlist_obj = getHistoryAsPlaylist(limit=200, use_cache=True, get_json=False)
         else:
             tracks = ytmdbs.getPlaylistSongsFromDb(data_id, convert_to_json=False)
             playlist_obj: dm.Playlist = ytmdbs.getPlaylistsFromDb(convert_to_json=False, playlist_id=data_id)
             playlist_obj.songs = tracks
-        return playlist_obj.to_json() if extra_data.get("json") else playlist_obj
+        return playlist_obj.to_json() if get_json else playlist_obj
 
     def getDataFromYTM(self, data_id, extra_data):
+        get_json = extra_data.get("json")
         # get songs from YTM
         if data_id == "history":
-            resp = getHistoryAsPlaylist(limit=200, use_cache=False)
+            playlist_obj = getHistoryAsPlaylist(limit=200, use_cache=False, get_json=False)
         else:
             resp = getYTMClient().get_playlist(data_id, limit=10000)
-        playlist_obj = dm.Playlist.from_json(resp)
+            playlist_obj = dm.Playlist.from_json(resp)
         # persist them
-        ytmdbs.persistPlaylistSongs(data_id, playlist_obj.songs)
-        return playlist_obj.to_json() if extra_data.get("json") else playlist_obj
+        ytmdbs.persistPlaylistSongs(playlist_obj)
+        return playlist_obj.to_json() if get_json else playlist_obj
 
 
 class CachedThumbnail(CachedData):
@@ -291,10 +295,10 @@ class CachedHistory(CachedData):
         self.data_type = DataType.HISTORY
 
     def getDataFromDb(self, data_id, extra_data):
-        return getHistoryAsPlaylist(limit=200, use_cache=True)
+        return getHistoryAsPlaylist(limit=200, use_cache=True, get_json=False)
 
     def getDataFromYTM(self, data_id, extra_data):
-        history_playlist = getHistoryAsPlaylist(use_cache=False)
+        history_playlist = getHistoryAsPlaylist(use_cache=False, get_json=False)
         persistHistory(history_playlist.songs)
         return history_playlist
 
@@ -307,15 +311,16 @@ artist_cache = CachedArtist()
 history_cache = CachedHistory()
 
 
-def getAllPlaylists(ignore_cache=False):
-    playlists = library_cache.getData("mine", ignore_cache)
+def getAllPlaylists(ignore_cache=False, get_json=True):
+    extra_data = {"json": get_json}
+    playlists = library_cache.getData("mine", ignore_cache, extra_data)
     history = getHistoryAsPlaylistShell([])
     return playlists + [history]
 
 
 def getHistory(ignore_cache=False, get_json=True):
-    history = history_cache.getData("history", ignore_cache)
-    return history if not get_json else history.to_json()
+    history_playlist_obj = history_cache.getData("history", ignore_cache)
+    return history_playlist_obj.to_json() if get_json else history_playlist_obj
 
 
 def getPlaylist(playlist_id, ignore_cache=False, get_json=True, find_dupes=True):
