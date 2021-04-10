@@ -77,6 +77,11 @@ export function groupSongsByAlbum(songs) {
     return albums;
 }
 
+function differentThumbnails(song1, song2) {
+    return Boolean((song1.thumbnail && !song2.thumbnail)
+        || (!song1.thumbnail && song2.thumbnail)
+        || (song1.thumbnail.url !== song2.thumbnail.url));
+}
 /**
  * DATA STRUCTURE:
  * {
@@ -88,14 +93,14 @@ export function groupSongsByAlbum(songs) {
  *     ]
  * }
  */
-
 function addSongsToMasterList(existingSongs, newSongs, forceUpdate) {
     newSongs.forEach((s) => {
         let newSong = cloneDeep(s)
         let existingSong = existingSongs[newSong.videoId]
         let shouldUpdate = forceUpdate
             || !existingSong
-            || existingSong.playlists.length !== newSong.playlists.length;
+            || existingSong.playlists.length !== newSong.playlists.length
+            || differentThumbnails(newSong, existingSong);
         if (shouldUpdate) {
             delete newSong.setVideoId;
             delete newSong.index;
@@ -164,13 +169,14 @@ export function playlistReducer(existingData, action) {
         case SET_PLAYLISTS:
             // This is called after fetching the list of playlists from flask: /library
             let payloadPlaylists = action.payload.playlists.map((playlist) => {
-                playlist.fetchedAllSongs = false
                 let thisExistingPlaylist = dataCopy.playlists.find((pl) => pl.playlistId === playlist.playlistId);
 
                 // set the songs if we've already fetched them for this playlist
                 if (!songsExist(playlist) && songsExist(thisExistingPlaylist)){
+                    playlist.fetchedAllSongs = true
                     playlist.songs = thisExistingPlaylist.songs
                 } else if (!songsExist(playlist)){
+                    playlist.fetchedAllSongs = false
                     playlist.songs = []
                 }
                 playlist.tracks = undefined;

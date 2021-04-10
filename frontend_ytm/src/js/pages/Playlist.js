@@ -218,7 +218,6 @@ export default function Playlist(props) {
             .then((resp) => {
                 let songs = resp.tracks
                 playlistContext.setSongs(playlistId, songs, forceRefresh)
-
                 // if the user had selected songs before refreshing: select those songs again
                 if (selectedIds) {
                     // TODO fix me
@@ -269,16 +268,12 @@ export default function Playlist(props) {
         }
 
         // do the sorting
-        let sortedSongIds = playlistSongs
-            .sort(sortFunction)
-            // .map((song) => {
-            //     return {videoId: song.videoId, setVideoId: song.setVideoId}
-            // })
+        let sortedSongIds = playlistSongs.sort(sortFunction)
         // set the state
         playlistContext.sortSongs(playlistId, sortedSongIds);
     }
 
-    // Define the columns in the for the playlist
+    // Define the columns for the playlist
     const columns = [
         {
             title: "Thumbnail",
@@ -286,8 +281,7 @@ export default function Playlist(props) {
             key: "thumbnail",
             render: (text, record) => {
                 return (
-                    <Thumbnail size={60}
-                               thumbnail={record.thumbnail}/>
+                    <Thumbnail size={60} thumbnail={record.thumbnail}/>
                 )
             },
         },
@@ -534,6 +528,7 @@ export default function Playlist(props) {
                     </Button>
                 </Popover>
 
+                {/*Search songs in playlist*/}
                 {!props.hideRemoveButton &&
                     // Remove button
                     <Button danger
@@ -543,7 +538,6 @@ export default function Playlist(props) {
                         Remove from playlist
                     </Button>
                 }
-                {/*Search songs in playlist*/}
                 <Input.Search
                     style={{margin: "0 0 10px 10px"}}
                     placeholder={"album | artist"}
