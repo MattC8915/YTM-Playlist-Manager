@@ -314,7 +314,7 @@ history_cache = CachedHistory()
 def getAllPlaylists(ignore_cache=False, get_json=True):
     extra_data = {"json": get_json}
     playlists = library_cache.getData("mine", ignore_cache, extra_data)
-    history = getHistoryAsPlaylistShell([])
+    history = getHistoryAsPlaylistShell([], get_json=True)
     return playlists + [history]
 
 

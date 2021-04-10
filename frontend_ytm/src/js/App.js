@@ -19,6 +19,7 @@ import {
 import ListenHistory from "./pages/ListenHistory";
 import PlaylistList from "./pages/PlaylistList";
 import Playlist from "./pages/Playlist";
+import Button from "antd/lib/button/button";
 
 export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
@@ -125,7 +126,7 @@ function App() {
     }, [loadPlaylists, loadedPlaylists, navKey, setLoadedPlaylists])
 
     function handleMenuClick(e) {
-        setNavKey(e.key)
+        let shouldSetNavKey = true;
         switch (e.key) {
             case "library":
                 nav("/")
@@ -137,7 +138,12 @@ function App() {
                 nav("/log")
                 break;
             default:
+                shouldSetNavKey = false;
                 break;
+        }
+        if (shouldSetNavKey) {
+            console.log("setting nav key")
+            setNavKey(e.key)
         }
     }
 
@@ -169,6 +175,9 @@ function App() {
                   </Menu.Item>
                   <Menu.Item key={"actionlog"} icon={<EditOutlined/>}>
                       Log
+                  </Menu.Item>
+                  <Menu.Item key={"delete"}>
+                    <Button onClick={() => console.log("HHHH")}>Delete session storage</Button>
                   </Menu.Item>
               </Menu>
               <Router>

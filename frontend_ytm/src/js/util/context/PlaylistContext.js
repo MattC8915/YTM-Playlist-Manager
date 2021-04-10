@@ -179,7 +179,7 @@ export function playlistReducer(existingData, action) {
                     playlist.fetchedAllSongs = false
                     playlist.songs = []
                 }
-                playlist.tracks = undefined;
+                delete playlist.tracks;
                 return playlist
             });
             dataCopy.playlists = payloadPlaylists;

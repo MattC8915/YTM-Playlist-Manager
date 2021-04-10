@@ -34,6 +34,8 @@ def generateArtistId():
 
 
 def getThumbnailId(url: str):
+    if not url:
+        return url
     parsed = urlparse(url)
     reg = r"(.*=)s\d+$"
     reg_match = re.search(reg, url)
@@ -42,18 +44,11 @@ def getThumbnailId(url: str):
         reg_match = re.search(reg, url)
     if not reg_match:
         if parsed.hostname == "yt3.ggpht.com" or parsed.hostname == "lh3.googleusercontent.com":
+            # noinspection PyTypeChecker
             raise Exception("this shouldn't happen")
         return url
     thumbnail_id = reg_match.group(1)
     return thumbnail_id
-
-
-def resizeThumbnailUrl(url: str, size: int):
-    if not size:
-        return url
-    thumbnail_id = getThumbnailId(url)
-    new_url = createThumbnailUrl(thumbnail_id, size)
-    return new_url
 
 
 def createThumbnailUrl(thumbnail_id: str, size: int):
@@ -69,12 +64,9 @@ def getThumbnailUrl(json_obj, size=None):
         album_thumbnail = json_obj.get("album", {}).get("thumbnail", {})
         thumbnails = [album_thumbnail] if album_thumbnail else []
     thumbnail = next((t.get("url") for t in thumbnails if t.get("width") == size), None)
-    if thumbnail:
-        thumbnails_id = getThumbnailId(thumbnail)
-        return thumbnails_id
-    elif thumbnails:
+    if not thumbnail and thumbnails:
         thumbnail = next((t.get("url") for t in thumbnails))
-        thumbnail = resizeThumbnailUrl(thumbnail, size)
+    thumbnail = getThumbnailId(thumbnail)
     return thumbnail
 
 
@@ -91,7 +83,8 @@ class Thumbnail:
 
     @classmethod
     def from_json(cls, thumbnail_json: dict, size=None):
-        thumbnail_id = getThumbnailUrl(thumbnail_json)
+        thumbnail_url = getThumbnailUrl(thumbnail_json)
+        thumbnail_id = getThumbnailId(thumbnail_url)
         return cs.getThumbnail(thumbnail_id, False, size=size)
 
     @classmethod
@@ -152,11 +145,9 @@ class Playlist:
         name = playlist_json.get("title")
         tracks = playlist_json.get("tracks", [])
         num_songs = playlist_json.get("count")
-        songs = getListOfSongObjects(tracks, from_db=False, include_playlists=True, include_index=True)
-        # songs = [Song.from_json(track, include_playlists=True, index=index) for index, track in enumerate(tracks)]
-        return cls(plid=pl_id, name=name, thumbnail=thumbnail,
-                   songs=songs,
-                   last_updated=datetime.now(), num_songs=num_songs)
+        songs = getListOfSongObjects(tracks, from_db=False, include_playlists=True, include_index=True, get_json=False)
+        return cls(plid=pl_id, name=name, thumbnail=thumbnail, songs=songs, last_updated=datetime.now(),
+                   num_songs=num_songs)
 
     def to_json(self):
         return {"playlistId": self.playlist_id,
@@ -246,7 +237,7 @@ class SongInPlaylist:
                 "index": self.index}
 
 
-def getListOfSongObjects(source_data, from_db, include_playlists, include_index=False):
+def getListOfSongObjects(source_data, from_db, include_playlists, include_index=False, get_json=False):
     if not source_data:
         return []
 
@@ -320,7 +311,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
             next_song.artists = song_artist_dict.get(next_song.video_id, [])
     logMessage("Done")
 
-    return songs
+    return [s.to_json() for s in songs] if get_json else songs
 
 
 class Song:
@@ -378,7 +369,8 @@ class Song:
         explicit = song_json.get("isExplicit", False)
         is_available = song_json.get("isAvailable", False)
         is_local = song_json.get("is_local", False)
-        thumbnail_id = getThumbnailUrl(song_json, size=60)
+        thumbnail_url = getThumbnailUrl(song_json, size=60)
+        thumbnail_id = getThumbnailId(thumbnail_url)
         album_json = song_json.get("album", {}) or {}
         album_id = album_json.get("id")
         album_name = album_json.get("name")

@@ -85,17 +85,17 @@ def persistHistory(history_items: List[Song]):
 #     # new_history = [r for r in reversed(new_history)]
 #     return new_history
 
-def getHistoryAsPlaylistShell(tracks):
-    return Playlist.from_json({"playlistId": "history", "title": "History", "tracks": tracks, "count": len(tracks)})
+def getHistoryAsPlaylistShell(tracks, get_json):
+    pl_json = {"playlistId": "history", "title": "History", "tracks": tracks, "count": len(tracks)}
+    return pl_json if get_json else Playlist.from_json(pl_json)
 
 
 def getHistoryAsPlaylist(limit=None, use_cache=False, get_json=True):
     if use_cache:
-        tracks = getSongsInHistoryFromDb(limit)
+        tracks = getSongsInHistoryFromDb(limit, get_json=True)
     else:
         tracks = getSongsInHistoryFromYTM(get_json=True)
-    playlist_obj = getHistoryAsPlaylistShell(tracks)
-    return playlist_obj.to_json() if get_json else playlist_obj
+    return getHistoryAsPlaylistShell(tracks, get_json)
 
 
 def getSongsInHistoryFromDb(limit=None, get_json=True):

@@ -194,7 +194,8 @@ def persistAllPlaylists(playlist_list):
     :return:
     """
     insert = "INSERT INTO playlist (id, name, thumbnail_id) VALUES (%s, %s, %s) " \
-             "ON CONFLICT ON CONSTRAINT playlist_id_key DO NOTHING "
+             "ON CONFLICT ON CONSTRAINT playlist_id_key " \
+             "DO UPDATE SET thumbnail_id=excluded.thumbnail_id, name=excluded.name "
     for playlist in playlist_list:
         persistThumbnail(playlist.thumbnail)
         data = playlist.to_db()
@@ -266,11 +267,9 @@ def getSongsFromDb(song_id, playlist_id, include_song_playlists, get_json=False)
         data += playlist_id,
         select += " order by sip.index"
     result = executeSQLFetchAll(select, data)
-    song_lst = dm.getListOfSongObjects(result, from_db=True, include_playlists=include_song_playlists, include_index=False)
-    # song_lst = [dm.Song.from_db(r, include_playlists=include_song_playlists) for r in result]
+    song_lst = dm.getListOfSongObjects(result, from_db=True, include_playlists=include_song_playlists,
+                                       include_index=False, get_json=get_json)
 
-    if get_json:
-        song_lst = [s.to_json() for s in song_lst]
     return song_lst
 
 
