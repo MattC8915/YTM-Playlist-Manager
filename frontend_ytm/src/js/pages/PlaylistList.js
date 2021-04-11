@@ -22,8 +22,7 @@ export default function PlaylistList(props) {
             key: "thumbnail",
             render: (text, record) => {
                 return (
-                    <Thumbnail size={96}
-                               thumbnail={record.thumbnail}/>
+                    <Thumbnail size={96} data={record}/>
                 )
             }
         },

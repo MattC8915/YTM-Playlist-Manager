@@ -281,7 +281,7 @@ export default function Playlist(props) {
             key: "thumbnail",
             render: (text, record) => {
                 return (
-                    <Thumbnail size={60} thumbnail={record.thumbnail}/>
+                    <Thumbnail size={60} data={record}/>
                 )
             },
         },
@@ -290,7 +290,12 @@ export default function Playlist(props) {
             dataIndex: "title",
             key: "title",
             sorter: true,
-            selectable: true
+            selectable: true,
+            render: (text, record) => {
+                return record.album && record.album.id ?
+                    <a href={`https://music.youtube.com/playlist?list=${record.album.id}`}>{text}</a>
+                    : text
+            }
         },
         {
             title: "Artist",

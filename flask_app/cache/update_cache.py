@@ -15,6 +15,7 @@ from db.db_service import executeSQL, executeSQLFetchAll
 
 # to turn a base64 string back into a url: binascii.unhexlify
 from log import logMessage, setupCustomLogger, logException
+from ytm_api.ytm_client import getYTMClient
 
 
 def downloadImages():
@@ -70,15 +71,10 @@ def updatePlaylists(playlist_id=None):
             time.sleep(60)
 
 
-def updateListenHistory():
-    getHistory(ignore_cache=True)
-
-
 def updateData():
     setupCustomLogger("update")
     updatePlaylists()
     downloadImages()
-    updateListenHistory()
 
 
 if __name__ == '__main__':

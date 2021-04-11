@@ -26,7 +26,13 @@ create table if not exists artist (
 create table if not exists album (
     id varchar unique,
     name varchar,
-    thumbnail_id varchar references thumbnail(id) on delete set null
+    thumbnail_id varchar references thumbnail(id) on delete set null,
+    playlist_id varchar,
+    description varchar,
+    trackCount int,
+    releaseDate varchar,
+    releaseDateTimestamp int,
+    length int,
 );
 
 create table if not exists song(
