@@ -3,14 +3,13 @@ create table if not exists thumbnail(
     primary key (id)
 );
 
-create table if not exists thumbnail_download(
-    thumbnail_id varchar references thumbnail(id) on delete cascade ,
+create table if not exists thumbnail_download (
+    thumbnail_id varchar references thumbnail(id) on delete cascade,
     downloaded boolean,
     size int,
     filepath varchar,
-    primary key (thumbnail_id, size)
+    primary key(thumbnail_id, size)
 );
-
 create table if not exists playlist (
     id varchar unique,
     name varchar,
