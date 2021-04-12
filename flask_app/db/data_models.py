@@ -350,7 +350,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
         for s in songs_with_thumb:
             album = album_id_map.get(s.album_id)
             if not album:
-                Album(s.album_id, s.album_name, next_thumb)
+                album = Album(s.album_id, s.album_name, next_thumb)
             album.thumbnail = next_thumb
             s.album = album
 
