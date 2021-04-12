@@ -238,6 +238,8 @@ class CachedThumbnail(CachedData):
         return result_obj
 
     def getListFromDb(self, data_ids: list, extra_data):
+        if not data_ids:
+            return []
         select = "SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download " \
                  "where thumbnail_id in %s"
         size = extra_data.get("size", None)
