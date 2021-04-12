@@ -63,15 +63,16 @@ def persistAllSongData(songs_to_add, playlist_id):
         if song.album:
             # persist the album thumbnail
             persistThumbnail(song.album.thumbnail)
-            # persist the album
-            insert_album = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, " \
-                           "release_date, release_date_timestamp, duration) " \
-                           "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT album_pkey DO NOTHING "
-            album_data = song.album.to_db()
-            try:
-                executeSQL(insert_album, album_data)
-            except Exception as e:
-                logException(e)
+            if song.album.album_id:
+                # persist the album
+                insert_album = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, " \
+                               "release_date, release_date_timestamp, duration) " \
+                               "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT album_pkey DO NOTHING "
+                album_data = song.album.to_db()
+                try:
+                    executeSQL(insert_album, album_data)
+                except Exception as e:
+                    logException(e)
 
         # persist the song
         insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local, is_available) " \
@@ -86,7 +87,7 @@ def persistAllSongData(songs_to_add, playlist_id):
                                    "VALUES (%s, %s, %s, %s, %s) " \
                                    "ON CONFLICT ON CONSTRAINT songs_in_playlist_pkey " \
                                    "DO NOTHING " \
-                # "DO UPDATE SET index=excluded.index"
+                # ""
             isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
             executeSQL(insert_song_playlist, isp_data)
 

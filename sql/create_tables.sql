@@ -53,10 +53,10 @@ create table if not exists artist_songs(
 create table if not exists songs_in_playlist(
     playlist_id varchar references playlist(id) on delete cascade,
     song_id varchar references song(id) on delete cascade,
-    set_video_id varchar ,
+    set_video_id varchar,
     datetime_added int,
     index int,
-    primary key (playlist_id, set_video_id)
+    primary key (playlist_id, song_id, set_video_id)
 );
 
 create type data_type as enum ('playlist', 'song', 'album', 'artist', 'thumbnail', 'library', 'history');
