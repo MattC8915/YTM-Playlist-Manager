@@ -80,7 +80,7 @@ export function groupSongsByAlbum(songs) {
 function differentThumbnails(song1, song2) {
     return Boolean((song1.thumbnail && !song2.thumbnail)
         || (!song1.thumbnail && song2.thumbnail)
-        || (song1.thumbnail.url !== song2.thumbnail.url));
+        || (song1.thumbnail && song2.thumbnail && song1.thumbnail.url !== song2.thumbnail.url));
 }
 /**
  * DATA STRUCTURE:

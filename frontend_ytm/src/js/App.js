@@ -1,6 +1,6 @@
 import {useEffect, useState, useCallback, useReducer} from "react";
 import {useHttp} from "./util/hooks/UseHttp";
-import {useReducerWithSessionStorage} from "./util/hooks/UseSessionStorage";
+import {clearSessionStorage, useReducerWithSessionStorage} from "./util/hooks/UseSessionStorage";
 import {Router} from "@reach/router"
 import {toast, ToastContainer} from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
@@ -177,7 +177,10 @@ function App() {
                       Log
                   </Menu.Item>
                   <Menu.Item key={"delete"}>
-                    <Button onClick={() => console.log("HHHH")}>Delete session storage</Button>
+                    <Button onClick={() => {
+                        clearSessionStorage()
+                        addToast("Success", SUCCESS_TOAST)
+                    }}>Delete session storage</Button>
                   </Menu.Item>
               </Menu>
               <Router>

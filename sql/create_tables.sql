@@ -1,6 +1,5 @@
 create table if not exists thumbnail(
-    id varchar unique,
-    primary key (id)
+    id varchar primary key
 );
 
 create table if not exists thumbnail_download (
@@ -11,31 +10,31 @@ create table if not exists thumbnail_download (
     primary key(thumbnail_id, size)
 );
 create table if not exists playlist (
-    id varchar unique,
+    id varchar primary key,
     name varchar,
     thumbnail_id varchar references thumbnail(id) on delete set null
 );
 
 create table if not exists artist (
-    id varchar unique,
+    id varchar primary key,
     name varchar,
     thumbnail_id varchar references thumbnail(id) on delete set null
 );
 
 create table if not exists album (
-    id varchar unique,
+    id varchar primary key,
     name varchar,
     thumbnail_id varchar references thumbnail(id) on delete set null,
     playlist_id varchar,
     description varchar,
-    trackCount int,
-    releaseDate varchar,
-    releaseDateTimestamp int,
-    length int,
+    num_tracks int,
+    release_date varchar,
+    release_date_timestamp int,
+    duration int
 );
 
 create table if not exists song(
-    id varchar unique,
+    id varchar primary key,
     name varchar,
     album_id varchar references album(id) on delete set null,
     length varchar,

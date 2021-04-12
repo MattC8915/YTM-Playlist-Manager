@@ -4,6 +4,11 @@
  */
 import {useEffect, useReducer, useRef, useState} from "react";
 
+
+export function clearSessionStorage() {
+    sessionStorage.clear()
+}
+
 /**
  * Persist a json object to session storage
  * @param key

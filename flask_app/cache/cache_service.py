@@ -5,10 +5,12 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from db import data_models as dm
+from db.data_models import getThumbnailUrl
 from db.db_service import executeSQLFetchOne, executeSQL, executeSQLFetchAll
 from db.listening_history import getHistoryAsPlaylist, persistHistory, \
     getHistoryAsPlaylistShell
 from db import ytm_db_service as ytmdbs
+from db.ytm_db_service import persistAlbum
 from log import logMessage
 from util import iterableToDbTuple
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
@@ -21,12 +23,12 @@ class DataType(Enum):
     Contains two values: value and cache_time
     cache_time is the number of days an item will be cached before it is invalidated
     """
-    PLAYLIST = ("playlist", 1)
     HISTORY = ("history", .5)
+    PLAYLIST = ("playlist", 1)
     LIBRARY = ("library", 1)
-    SONG = ("song", 30)
     ARTIST = ("artist", 7)
-    ALBUM = ("album", 30)
+    SONG = ("song", 30)
+    ALBUM = ("album", 1000)
     THUMBNAIL = ("thumbnail", 1000)
 
     def __new__(cls, data_type, cache_time):
@@ -265,10 +267,21 @@ class CachedAlbum(CachedData):
         self.data_type = DataType.ALBUM
 
     def getDataFromDb(self, data_id, extra_data):
-        return None
+        select = "SELECT id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
+                 "release_date_timestamp, duration " \
+                 "FROM album " \
+                 "WHERE id = %s"
+        data = data_id,
+        result = executeSQLFetchOne(select, data)
+        return dm.Album.from_db(result)
 
     def getDataFromYTM(self, data_id, extra_data):
-        return None
+        album_json = getYTMClient().get_album(data_id)
+        thumbnail_id = getThumbnailUrl(album_json, size=60)
+        thumbnail = getThumbnail(thumbnail_id)
+        album = dm.Album.from_json(data_id, album_json, thumbnail=thumbnail, thumbnail_id=None)
+        persistAlbum(album)
+        return album
 
 
 class CachedArtist(CachedData):

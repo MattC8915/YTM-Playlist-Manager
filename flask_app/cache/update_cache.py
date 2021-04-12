@@ -8,10 +8,9 @@ from urllib.parse import urlparse
 
 import requests
 
-from cache.cache_service import getPlaylist, getAllPlaylists, getHistory
+from cache.cache_service import getPlaylist, getAllPlaylists, getHistory, getAlbum
 from db.data_models import Thumbnail
 from db.db_service import executeSQL, executeSQLFetchAll
-
 
 # to turn a base64 string back into a url: binascii.unhexlify
 from log import logMessage, setupCustomLogger, logException
@@ -71,9 +70,19 @@ def updatePlaylists(playlist_id=None):
             time.sleep(60)
 
 
+def updateAlbums():
+    select = "SELECT id FROM album where playlist_id is null and id is not null"
+    albums = executeSQLFetchAll(select, None)
+    for a in albums:
+        aid = a[0]
+        a = getAlbum(aid)
+        time.sleep(10)
+
+
 def updateData():
     setupCustomLogger("update")
     updatePlaylists()
+    updateAlbums()
     downloadImages()
 
 

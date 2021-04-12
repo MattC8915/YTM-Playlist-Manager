@@ -14,7 +14,6 @@ from db.db_service import executeSQLFetchAll
 from db.ytm_db_service import updateDictEntry
 from log import logMessage
 from util import iterableToDbTuple
-from ytm_api.ytm_service import getSongsFromYTM
 
 
 def createRandomCode():
@@ -159,25 +158,62 @@ class Playlist:
 
 
 class Album:
-    def __init__(self, aid, name, thumbnail: Thumbnail):
+    def __init__(self, aid, name, thumbnail: Thumbnail, playlist_id=None, description=None, num_tracks=None,
+                 release_date_timestamp=None, duration=None, thumbnail_id=None):
         self.album_id = aid
         self.name = name
         self.thumbnail = thumbnail
+        self.playlist_id = playlist_id
+        self.description = description
+        self.num_tracks = num_tracks
+        self.release_date = datetime.fromtimestamp(release_date_timestamp).strftime("%b %d, %Y") \
+            if release_date_timestamp else ""
+        self.release_date_timestamp = release_date_timestamp
+        self.duration = duration
+        self.thumbnail_id = thumbnail_id
 
     def __str__(self):
         return self.name if self.name else "<untitled>"
 
     def to_db(self):
-        return self.album_id, self.name, self.thumbnail.thumbnail_id
+        thumb_id = self.thumbnail.thumbnail_id if self.thumbnail else self.thumbnail_id
+        return self.album_id, self.name, thumb_id, self.playlist_id, self.description, \
+            self.num_tracks, self.release_date, self.release_date_timestamp, self.duration
 
     @classmethod
-    def from_json(cls, album_json, thumbnail: Thumbnail):
+    def from_db(cls, db_tuple):
+        aid, name, thumbnail_id, playlist_id, description, num_tracks, release_date, \
+            release_date_timestamp, duration = db_tuple
+        return cls(aid, name, None, playlist_id, description, num_tracks, release_date_timestamp, duration,
+                   thumbnail_id=thumbnail_id)
+
+    @classmethod
+    def from_json(cls, album_id, album_json, thumbnail: Thumbnail, thumbnail_id=None):
+        aid = album_json.get("id")
+        name = album_json.get("title")
+        playlist_id = album_json.get("playlistId")
+        description = album_json.get("description")
+        num_tracks = album_json.get("trackCount")
+        release_date = album_json.get("releaseDate")
+        if release_date:
+            rd = datetime.now().replace(minute=0, second=0, microsecond=0, year=release_date.get("year"),
+                                        month=release_date.get("month"), day=release_date.get("day"))
+            rd_timestamp = rd.timestamp()
+        else:
+            rd_timestamp = None
+        duration = int(album_json.get("durationMs"))
+        if duration:
+            duration = duration / 1000
         if not album_json:
             return cls("", "", thumbnail)
-        return cls(aid=album_json.get("id"), name=album_json.get("name"), thumbnail=thumbnail)
+        return cls(aid=album_id, name=name, thumbnail=thumbnail, playlist_id=playlist_id, description=description,
+                   num_tracks=num_tracks, release_date_timestamp=rd_timestamp, duration=duration,
+                   thumbnail_id=thumbnail_id)
 
     def to_json(self):
-        return {"id": self.album_id, "name": self.name,
+        return {"id": self.album_id, "name": self.name, "playlist_id": self.playlist_id,
+                "description": self.description,
+                "num_tracks": self.num_tracks, "release_date": self.release_date_timestamp, "duration": self.duration,
                 "thumbnail": self.thumbnail.to_json() if self.thumbnail else {}}
 
 
@@ -246,26 +282,28 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
         songs: List[Song] = [Song.from_db(s, index) for index, s in enumerate(source_data)] \
             if from_db else [Song.from_json(s, index) for index, s in enumerate(source_data)]
     else:
-        songs: List[Song] = [Song.from_db(s) for s in source_data] if from_db else [Song.from_json(s) for s in source_data]
+        songs: List[Song] = [Song.from_db(s) for s in source_data] if from_db else [Song.from_json(s) for s in
+                                                                                    source_data]
     # logMessage("Done creating objects")
     song_id_to_source_data = {}
     song_ids = set()
-    song_id_data = []
+    album_ids = set()
     thumbnail_ids = set()
     thumbnail_id_to_song = {}
     for index, next_song in enumerate(songs):
+        if next_song.album_id:
+            album_ids.add(next_song.album_id)
         if next_song.thumbnail_id:
             thumbnail_ids.add(next_song.thumbnail_id)
         updateDictEntry(thumbnail_id_to_song, next_song.thumbnail_id, next_song)
-        song_id_data.append((next_song.video_id,))
         song_ids.add(next_song.video_id)
         song_id_to_source_data[next_song.video_id] = source_data[index]
-    song_id_data = tuple(song_id_data),
     thumbnail_ids = list(thumbnail_ids)
     # logMessage("Done creating id lists")
 
     # get playlist data
     song_playlist_dict = {}
+    song_id_data = iterableToDbTuple(song_ids),
     if include_playlists:
         select = "SELECT sip.song_id, sip.set_video_id, sip.index, p.id, p.name " \
                  "FROM songs_in_playlist as sip, playlist as p " \
@@ -290,18 +328,31 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
             updateDictEntry(song_artist_dict, song_id, artist_obj)
     # logMessage("Done getting artists")
 
+    # get all album data
+    album_id_map = {}
+    # TODO next make sure this works from db and json
+    #  and make sure I'm not doing anything twice (like grabbing thumbnail data)
+    if len(album_ids) > 0:
+        select_albums = "SELECT id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
+                        "release_date_timestamp, duration " \
+                        "FROM album " \
+                        "WHERE id in %s"
+        album_ids_tuple = iterableToDbTuple(album_ids),
+        album_results = executeSQLFetchAll(select_albums, album_ids_tuple)
+        for next_album in album_results:
+            a = Album.from_db(next_album)
+            album_id_map[a.album_id] = a
+
     # get thumbnail data, then create album objects for each song
     thumbnails: List[Thumbnail] = cs.getListOfThumbnails(thumbnail_ids, size=60)
     for next_thumb in thumbnails:
         songs_with_thumb: List[Song] = thumbnail_id_to_song[next_thumb.thumbnail_id]
-        last_album_id = None
-        album = None
         for s in songs_with_thumb:
-            album = Album(s.album_id, s.album_name, next_thumb) if (not album or not last_album_id == s.album_id) \
-                else album
+            album = album_id_map.get(s.album_id)
+            if not album:
+                Album(s.album_id, s.album_name, next_thumb)
+            album.thumbnail = next_thumb
             s.album = album
-            last_album_id = s.album_id
-    # logMessage("Done getting thumbnails")
 
     # set playlists, artist
     for next_song in songs:

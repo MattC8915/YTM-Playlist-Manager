@@ -292,8 +292,8 @@ export default function Playlist(props) {
             sorter: true,
             selectable: true,
             render: (text, record) => {
-                return record.album && record.album.id ?
-                    <a href={`https://music.youtube.com/playlist?list=${record.album.id}`}>{text}</a>
+                return record.album && record.album.playlist_id ?
+                    <a href={`https://music.youtube.com/playlist?list=${record.album.playlist_id}`}>{text}</a>
                     : text
             }
         },

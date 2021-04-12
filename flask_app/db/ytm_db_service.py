@@ -2,8 +2,6 @@
 from datetime import datetime
 from typing import List
 
-import psycopg2
-
 from cache import cache_service
 from db import data_models as dm
 from db.db_service import executeSQL, executeSQLFetchAll, executeSQLFetchOne
@@ -35,6 +33,21 @@ def updateSongInPlaylist(new_song_object, playlist_id):
     executeSQL(update, data)
 
 
+def persistAlbum(album: 'dm.Album'):
+    insert = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
+             "release_date_timestamp, duration) values (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+
+    if album.playlist_id:
+        insert += "ON CONFLICT ON CONSTRAINT album_pkey DO UPDATE SET name=excluded.name, thumbnail_id=excluded.thumbnail_id, " \
+                  "playlist_id=excluded.playlist_id, description=excluded.description, " \
+                  "num_tracks=excluded.num_tracks, release_date=excluded.release_date, " \
+                  "release_date_timestamp=excluded.release_date_timestamp, duration=excluded.duration"
+    else:
+        insert += "ON CONFLICT DO NOTHING"
+    data = album.to_db()
+    executeSQL(insert, data)
+
+
 def persistAllSongData(songs_to_add, playlist_id):
     """
     Persists songs to the database if it doesn't exist.
@@ -51,8 +64,9 @@ def persistAllSongData(songs_to_add, playlist_id):
             # persist the album thumbnail
             persistThumbnail(song.album.thumbnail)
             # persist the album
-            insert_album = "INSERT INTO album (id, name, thumbnail_id) " \
-                           "VALUES (%s, %s, %s) ON CONFLICT ON CONSTRAINT album_id_key DO NOTHING "
+            insert_album = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, " \
+                           "release_date, release_date_timestamp, duration) " \
+                           "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT album_pkey DO NOTHING "
             album_data = song.album.to_db()
             try:
                 executeSQL(insert_album, album_data)
@@ -61,7 +75,7 @@ def persistAllSongData(songs_to_add, playlist_id):
 
         # persist the song
         insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local, is_available) " \
-                      "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_id_key DO NOTHING "
+                      "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_pkey DO NOTHING "
         song_data = song.to_db()
         executeSQL(insert_song, song_data)
 
@@ -81,7 +95,7 @@ def persistAllSongData(songs_to_add, playlist_id):
                              "ON CONFLICT ON CONSTRAINT artist_songs_pkey DO NOTHING"
         # persist the artists
         insert_artist = "INSERT INTO artist (id, name, thumbnail_id) " \
-                        "VALUES (%s, %s, %s) ON CONFLICT ON CONSTRAINT artist_id_key DO NOTHING "
+                        "VALUES (%s, %s, %s) ON CONFLICT ON CONSTRAINT artist_pkey DO NOTHING "
         for artist in song.artists:
             artist_data = artist.to_db()
             executeSQL(insert_artist, artist_data)
@@ -194,7 +208,7 @@ def persistAllPlaylists(playlist_list):
     :return:
     """
     insert = "INSERT INTO playlist (id, name, thumbnail_id) VALUES (%s, %s, %s) " \
-             "ON CONFLICT ON CONSTRAINT playlist_id_key " \
+             "ON CONFLICT ON CONSTRAINT playlist_pkey " \
              "DO UPDATE SET thumbnail_id=excluded.thumbnail_id, name=excluded.name "
     for playlist in playlist_list:
         persistThumbnail(playlist.thumbnail)
