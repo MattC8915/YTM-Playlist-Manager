@@ -1,4 +1,6 @@
 """Contains code that interacts with the Youtube Music API"""
+from typing import List
+
 from cache import cache_service
 from db import data_models
 from db import ytm_db_service
@@ -139,7 +141,7 @@ def removeSongsFromPlaylist(playlist_id, songs):
     return resp
 
 
-def findDuplicatesAndAddFlag(tracks):
+def findDuplicatesAndAddFlag(tracks: 'List[data_models.Song]'):
     """
     Find duplicate songs in the list of json song objects.
     A boolean value 'is_dupe' is added to the json object if it is a duplicate.
@@ -149,10 +151,10 @@ def findDuplicatesAndAddFlag(tracks):
     id_set = set()
     duplicate_list = []
     for next_track in tracks:
-        vid_id = next_track.get("videoId")
+        vid_id = next_track.video_id
         if vid_id in id_set:
-            duplicate_list.append((next_track["videoId"], next_track["setVideoId"]))
+            duplicate_list.append((next_track.video_id, next_track.set_video_id))
             # add this flag so the frontend can highlight duplicates
-            next_track["isDupe"] = True
+            next_track.is_dupe = True
         id_set.add(vid_id)
     return duplicate_list

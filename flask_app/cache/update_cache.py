@@ -70,13 +70,20 @@ def updatePlaylists(playlist_id=None):
             time.sleep(60)
 
 
-def updateAlbums():
-    select = "SELECT id FROM album where playlist_id is null and id is not null"
-    albums = executeSQLFetchAll(select, None)
-    for a in albums:
-        aid = a[0]
-        a = getAlbum(aid)
-        time.sleep(10)
+def updateAlbums(album_id=None):
+    if not album_id:
+        select = "SELECT id FROM album where playlist_id is null and id is not null"
+        albums = executeSQLFetchAll(select, None)
+        for a in albums:
+            aid = a[0]
+            if "FEmusic_library_privately_owned_release" in aid:
+                # TODO fix ytmusicapi so getAlbum works with
+                continue
+            a = getAlbum(aid)
+            time.sleep(10)
+    else:
+        a = getAlbum(album_id)
+        time.sleep(1)
 
 
 def updateData():

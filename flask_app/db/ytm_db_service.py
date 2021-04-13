@@ -35,13 +35,14 @@ def updateSongInPlaylist(new_song_object, playlist_id):
 
 def persistAlbum(album: 'dm.Album'):
     insert = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
-             "release_date_timestamp, duration) values (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+             "release_date_timestamp, duration, release_type) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
 
     if album.playlist_id:
         insert += "ON CONFLICT ON CONSTRAINT album_pkey DO UPDATE SET name=excluded.name, thumbnail_id=excluded.thumbnail_id, " \
                   "playlist_id=excluded.playlist_id, description=excluded.description, " \
                   "num_tracks=excluded.num_tracks, release_date=excluded.release_date, " \
-                  "release_date_timestamp=excluded.release_date_timestamp, duration=excluded.duration"
+                  "release_date_timestamp=excluded.release_date_timestamp, duration=excluded.duration, " \
+                  "release_type=excluded.release_type"
     else:
         insert += "ON CONFLICT DO NOTHING"
     data = album.to_db()
@@ -53,11 +54,12 @@ def persistAllSongData(songs_to_add, playlist_id):
     Persists songs to the database if it doesn't exist.
     Persists the song's artists to the database if they don't exist.
     Persists the song's album to the database if it doesn't exist.
-
     :param songs_to_add:
     :param playlist_id:
     :return:
     """
+    if not isinstance(songs_to_add, list):
+        songs_to_add = [songs_to_add]
     datetime_added = datetime.now().timestamp()
     for song in songs_to_add:
         if song.album:
@@ -65,14 +67,7 @@ def persistAllSongData(songs_to_add, playlist_id):
             persistThumbnail(song.album.thumbnail)
             if song.album.album_id:
                 # persist the album
-                insert_album = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, " \
-                               "release_date, release_date_timestamp, duration) " \
-                               "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT album_pkey DO NOTHING "
-                album_data = song.album.to_db()
-                try:
-                    executeSQL(insert_album, album_data)
-                except Exception as e:
-                    logException(e)
+                persistAlbum(song.album)
 
         # persist the song
         insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local, is_available) " \
@@ -86,10 +81,9 @@ def persistAllSongData(songs_to_add, playlist_id):
                                    "(playlist_id, song_id, set_video_id, datetime_added, index) " \
                                    "VALUES (%s, %s, %s, %s, %s) " \
                                    "ON CONFLICT ON CONSTRAINT songs_in_playlist_pkey " \
-                                   "DO NOTHING " \
-                # ""
-            isp_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
-            executeSQL(insert_song_playlist, isp_data)
+                                   "DO NOTHING "
+            sip_data = playlist_id, song.video_id, song.set_video_id, datetime_added, song.index
+            executeSQL(insert_song_playlist, sip_data)
 
         # persist the song/artist relationships
         insert_song_artist = "INSERT INTO artist_songs (song_id, artist_id) VALUES (%s, %s) " \

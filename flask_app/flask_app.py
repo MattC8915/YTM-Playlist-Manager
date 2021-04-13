@@ -107,6 +107,17 @@ def getPlaylistEndpoint(playlist_id):
     return httpResponse(result)
 
 
+@app.route("/artist/<artist_id>", methods=["GET"])
+def getArtistEndpoint(artist_id):
+    """
+    Returns all artist data
+    :return:
+    """
+    ignore_cache = shouldIgnoreCache(request_args=request.args)
+    result = cs.getArtist(artist_id, ignore_cache, get_json=True)
+    return httpResponse(result)
+
+
 @app.route('/library', methods=["GET"])
 def getAllPlaylistsEndpoint():
     """

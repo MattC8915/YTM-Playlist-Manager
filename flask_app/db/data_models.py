@@ -32,7 +32,7 @@ def generateArtistId():
     return f"generated_{createRandomCode()}"
 
 
-def getThumbnailId(url: str):
+def getThumbnailIdFromUrl(url: str):
     if not url:
         return url
     parsed = urlparse(url)
@@ -57,7 +57,7 @@ def createThumbnailUrl(thumbnail_id: str, size: int):
     return thumbnail_id
 
 
-def getThumbnailUrl(json_obj, size=None):
+def getThumbnailId(json_obj, size=None):
     thumbnails = json_obj.get("thumbnails", [])
     if not thumbnails:
         album_thumbnail = json_obj.get("album", {}).get("thumbnail", {})
@@ -65,7 +65,7 @@ def getThumbnailUrl(json_obj, size=None):
     thumbnail = next((t.get("url") for t in thumbnails if t.get("width") == size), None)
     if not thumbnail and thumbnails:
         thumbnail = next((t.get("url") for t in thumbnails))
-    thumbnail = getThumbnailId(thumbnail)
+    thumbnail = getThumbnailIdFromUrl(thumbnail)
     return thumbnail
 
 
@@ -82,8 +82,7 @@ class Thumbnail:
 
     @classmethod
     def from_json(cls, thumbnail_json: dict, size=None):
-        thumbnail_url = getThumbnailUrl(thumbnail_json)
-        thumbnail_id = getThumbnailId(thumbnail_url)
+        thumbnail_id = getThumbnailId(thumbnail_json)
         return cs.getThumbnail(thumbnail_id, False, size=size)
 
     @classmethod
@@ -157,9 +156,27 @@ class Playlist:
                 "thumbnail": self.thumbnail.to_json() if self.thumbnail else None}
 
 
+class ReleaseType(Enum):
+    """
+    Enum for the different types of releases
+    """
+    ALBUM = "album"
+    SINGLE = "single"
+    EP = "ep"
+
+    @classmethod
+    def from_ytm_value(cls, val):
+        if val == "abc":
+            return cls.ALBUM
+
+    @classmethod
+    def from_str(cls, val):
+        return ReleaseType(val.lower())
+
+
 class Album:
     def __init__(self, aid, name, thumbnail: Thumbnail, playlist_id=None, description=None, num_tracks=None,
-                 release_date_timestamp=None, duration=None, thumbnail_id=None):
+                 release_date_timestamp=None, duration=None, release_type=None, thumbnail_id=None):
         self.album_id = aid
         self.name = name
         self.thumbnail = thumbnail
@@ -170,6 +187,7 @@ class Album:
             if release_date_timestamp else ""
         self.release_date_timestamp = release_date_timestamp
         self.duration = duration
+        self.release_type: ReleaseType = release_type
         self.thumbnail_id = thumbnail_id
 
     def __str__(self):
@@ -178,47 +196,60 @@ class Album:
     def to_db(self):
         thumb_id = self.thumbnail.thumbnail_id if self.thumbnail else self.thumbnail_id
         return self.album_id, self.name, thumb_id, self.playlist_id, self.description, \
-            self.num_tracks, self.release_date, self.release_date_timestamp, self.duration
+            self.num_tracks, self.release_date, self.release_date_timestamp, self.duration, self.release_type.value
 
     @classmethod
     def from_db(cls, db_tuple):
         aid, name, thumbnail_id, playlist_id, description, num_tracks, release_date, \
-            release_date_timestamp, duration = db_tuple
+            release_date_timestamp, duration, release_type = db_tuple
         return cls(aid, name, None, playlist_id, description, num_tracks, release_date_timestamp, duration,
-                   thumbnail_id=thumbnail_id)
+                   thumbnail_id=thumbnail_id, release_type=release_type)
 
     @classmethod
-    def from_json(cls, album_id, album_json, thumbnail: Thumbnail, thumbnail_id=None):
-        aid = album_json.get("id")
+    def from_json(cls, album_id, album_json, release_type=None):
+        aid = album_json.get("id") or album_json.get("browseId")
+        if not album_id:
+            album_id = aid
+        thumbnail = Thumbnail.from_json(album_json, size=60)
         name = album_json.get("title")
         playlist_id = album_json.get("playlistId")
         description = album_json.get("description")
         num_tracks = album_json.get("trackCount")
         release_date = album_json.get("releaseDate")
+
+        if release_type:
+            rel_type = ReleaseType.from_str(release_type)
+        else:
+            rel_type = ReleaseType.from_ytm_value(album_json.get("releaseType"))
+
         if release_date:
             rd = datetime.now().replace(minute=0, second=0, microsecond=0, year=release_date.get("year"),
                                         month=release_date.get("month"), day=release_date.get("day"))
             rd_timestamp = rd.timestamp()
         else:
             rd_timestamp = None
-        duration = int(album_json.get("durationMs"))
+
+        duration = album_json.get("durationMs")
+        duration = int(duration) if duration else None
         if duration:
             duration = duration / 1000
+
         if not album_json:
             return cls("", "", thumbnail)
+
         return cls(aid=album_id, name=name, thumbnail=thumbnail, playlist_id=playlist_id, description=description,
                    num_tracks=num_tracks, release_date_timestamp=rd_timestamp, duration=duration,
-                   thumbnail_id=thumbnail_id)
+                   release_type=rel_type, thumbnail_id=None)
 
     def to_json(self):
         return {"id": self.album_id, "name": self.name, "playlist_id": self.playlist_id,
-                "description": self.description,
+                "description": self.description, "release_type": self.release_type.value if self.release_type else "",
                 "num_tracks": self.num_tracks, "release_date": self.release_date_timestamp, "duration": self.duration,
                 "thumbnail": self.thumbnail.to_json() if self.thumbnail else {}}
 
 
 class Artist:
-    def __init__(self, aid, name, thumbnail: Thumbnail):
+    def __init__(self, aid, name, thumbnail: Thumbnail, description=None, views=None, channel_id=None, subscribers=None):
         self.artist_id = aid
         if not self.artist_id:
             self.artist_id = dbs.getArtistId(name)
@@ -226,6 +257,12 @@ class Artist:
             self.artist_id = generateArtistId()
         self.name = name
         self.thumbnail = thumbnail
+        self.description = description
+        self.views = views
+        self.channel_id = channel_id
+        self.subscribers = subscribers
+        self.albums = []
+        self.singles = []
 
     def __str__(self):
         return self.name
@@ -241,16 +278,32 @@ class Artist:
         if isinstance(artist_json, str):
             artist_id = None
             artist_name = artist_json
+            thumbnail = None
+            description, views, channel_id, subscribers = None, None, None, None
         else:
             artist_id = artist_json.get("id")
             artist_name = artist_json.get("name")
+            thumbnail = Thumbnail.from_json(artist_json)
+            description = artist_json.get("description")
+            views = artist_json.get("views")
+            channel_id = artist_json.get("channelId")
+            subscribers = artist_json.get("subscribers")
         # noinspection PyTypeChecker
-        return cls(artist_id, artist_name, None)
+        return cls(artist_id, artist_name, thumbnail, description, views, channel_id, subscribers)
 
     def to_json(self):
-        data = {"id": self.artist_id, "name": self.name}
+        data = {"id": self.artist_id,
+                "name": self.name,
+                "description": self.description,
+                "views": self.views,
+                "channel_id": self.channel_id,
+                "subscribers": self.subscribers,
+                "albums": [a.to_json() for a in self.albums],
+                "singles": [s.to_json() for s in self.singles]
+                }
         if self.thumbnail:
-            data += {"thumbnail": self.thumbnail.to_json()}
+            data["thumbnail"] = self.thumbnail.to_json()
+
         return data
 
     def to_db(self):
@@ -334,7 +387,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
     #  and make sure I'm not doing anything twice (like grabbing thumbnail data)
     if len(album_ids) > 0:
         select_albums = "SELECT id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
-                        "release_date_timestamp, duration " \
+                        "release_date_timestamp, duration, release_type " \
                         "FROM album " \
                         "WHERE id in %s"
         album_ids_tuple = iterableToDbTuple(album_ids),
@@ -382,6 +435,7 @@ class Song:
         self.is_available = is_available
         self.local = local or (album_id and "FEmusic_library_privately_owned_release" in album_id)
         self.playlists = []
+        self.is_dupe = False
 
     def __str__(self):
         return f"{self.title} by {', '.join([str(a) for a in self.artists])} on {self.album}"
@@ -389,7 +443,7 @@ class Song:
     def to_json(self):
         return {"videoId": self.video_id, "setVideoId": self.set_video_id, "title": self.title, "index": self.index,
                 "album": self.album.to_json() if self.album else {}, "isAvailable": self.is_available,
-                "artists": [a.to_json() for a in self.artists],
+                "artists": [a.to_json() for a in self.artists], "is_dupe": self.is_dupe,
                 "playlists": [sip.to_json() for sip in self.playlists],
                 "duration": self.duration, "isExplicit": self.explicit, "is_local": self.local}
 
@@ -420,8 +474,7 @@ class Song:
         explicit = song_json.get("isExplicit", False)
         is_available = song_json.get("isAvailable", False)
         is_local = song_json.get("is_local", False)
-        thumbnail_url = getThumbnailUrl(song_json, size=60)
-        thumbnail_id = getThumbnailId(thumbnail_url)
+        thumbnail_id = getThumbnailId(song_json, size=60)
         album_json = song_json.get("album", {}) or {}
         album_id = album_json.get("id")
         album_name = album_json.get("name")
