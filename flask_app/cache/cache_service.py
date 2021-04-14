@@ -285,7 +285,7 @@ class CachedAlbum(CachedData):
         try:
             album_json = getYTMClient().get_album(data_id)
         except Exception as e:
-            if "HTTP 404" in e:
+            if "HTTP 404" in str(e):
                 return None
             raise e
         album = dm.Album.from_json(data_id, album_json)
