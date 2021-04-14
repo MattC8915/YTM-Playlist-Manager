@@ -195,7 +195,7 @@ class Album:
 
     def to_db(self):
         thumb_id = self.thumbnail.thumbnail_id if self.thumbnail else self.thumbnail_id
-        rel_type = self.release_type.value if self.release_type else ""
+        rel_type = self.release_type.value if self.release_type else None
         return self.album_id, self.name, thumb_id, self.playlist_id, self.description, \
             self.num_tracks, self.release_date, self.release_date_timestamp, self.duration, rel_type
 
