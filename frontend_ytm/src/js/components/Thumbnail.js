@@ -5,10 +5,10 @@ export default function Thumbnail(props) {
     let src = null;
     let [shouldEmbed, setShouldEmbed] = useState(false);
     let thumbnail = props.data.thumbnail;
+    let videoId = props.data.videoId
     if (thumbnail) {
         if (thumbnail.filepath) {
             src = `http://nuc:3000/images/${thumbnail.filepath}`
-            // src = `http://localhost:5050/images/${props.thumbnail.filepath}`
         } else {
             src = thumbnail.url
         }
@@ -16,7 +16,7 @@ export default function Thumbnail(props) {
     return (
         <div>
             {shouldEmbed ? (
-                <iframe width="560" height="315" src={`https://www.youtube.com/embed/${props.data.videoId}`}
+                <iframe width="560" height="315" src={`https://www.youtube.com/embed/${videoId}`}
                         title="YouTube video player" frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen/>
@@ -30,8 +30,9 @@ export default function Thumbnail(props) {
                     loading={"lazy"}
                     src={src}
                     onClick={(e) => {
-                        console.log(props.data)
-                        setShouldEmbed(!shouldEmbed)
+                        if (videoId) {
+                            setShouldEmbed(!shouldEmbed)
+                        }
                     }}
                 />
             )}

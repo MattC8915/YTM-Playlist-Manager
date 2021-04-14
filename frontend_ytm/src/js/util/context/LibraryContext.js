@@ -4,7 +4,7 @@ import {songsExist} from "../../pages/Playlist";
 /**
  * Context object for playlist state management
  */
-export const PlaylistContext = createContext({});
+export const LibraryContext = createContext({});
 
 export const cloneDeep = require("lodash.clonedeep");
 
@@ -13,6 +13,7 @@ export const SET_SONGS = "SET_SONGS"
 export const SORT_SONGS = "SORT_SONGS"
 export const ADD_SONGS = "ADD_SONGS"
 export const REMOVE_SONGS = "REMOVE_SONGS"
+export const SET_ARTIST = "SET_ARTIST"
 
 
 function getArtistString(songs) {
@@ -32,7 +33,6 @@ function getArtistString(songs) {
 }
 
 export function groupSongsByAlbum(songs) {
-    // TODO next this is broken when an album is null (godfather of harlem includes other loosies)
     let uniqueAlbumIds = [];
     let uniqueAlbums = [];
     let uniqueArtistNames = [];
@@ -74,6 +74,15 @@ export function groupSongsByAlbum(songs) {
         return album;
     })
     albums.push(...artists);
+    albums.sort((a1, a2) => {
+        let lowestA1 = a1.children.reduce((lowestIndex, nextSong) => {
+            return nextSong.index < lowestIndex ? nextSong.index : lowestIndex;
+        }, 10000)
+        let lowestA2 = a2.children.reduce((lowestIndex, nextSong) => {
+            return nextSong.index < lowestIndex ? nextSong.index : lowestIndex;
+        }, 10000)
+        return lowestA1 < lowestA2 ? -1 : 1;
+    })
     return albums;
 }
 
@@ -85,9 +94,20 @@ function differentThumbnails(song1, song2) {
 /**
  * DATA STRUCTURE:
  * {
- *     songs: [
- *      { song id: {all song data} }
- *     ]
+ *     songs:
+ *      {
+ *          songId: {all song data}
+ *      }
+ *     artists: {
+ *        {
+ *          artistId: {artist data}
+ *        }
+ *     },
+ *     albums: {
+ *        {
+ *          albumId: {album data}
+ *        }
+ *     },
  *     playlists: [
  *         {all playlist data}
  *     ]
@@ -111,6 +131,11 @@ function addSongsToMasterList(existingSongs, newSongs, forceUpdate) {
     })
 }
 
+/**
+ * Extracts the important information from a list of Song objects
+ * @param songs
+ * @returns {*}
+ */
 function getSongIds(songs) {
     return songs.map((song) => {
         return {videoId: song.videoId, setVideoId: song.setVideoId,
@@ -118,6 +143,12 @@ function getSongIds(songs) {
     })
 }
 
+/**
+ * This is called after songs are added to a playlist on the backend -- add a playlist to each song's list of playlists
+ * @param playlist
+ * @param newSongs
+ * @param canonSongs
+ */
 function addPlaylistToCanonSongs(playlist, newSongs, canonSongs) {
     newSongs.forEach((song) => {
         let newVideoId = song.videoId
@@ -132,6 +163,13 @@ function addPlaylistToCanonSongs(playlist, newSongs, canonSongs) {
         }
     })
 }
+
+/**
+ * This is called after songs are removed from a playlist on the backend - it removes them on the frontend
+ * @param playlist
+ * @param removedSongs
+ * @param canonSongs
+ */
 function removeSongsFromPlaylistObject(playlist, removedSongs, canonSongs) {
     removedSongs.forEach((song) => {
         let canonSong = canonSongs[song.videoId]
@@ -150,7 +188,7 @@ function removeSongsFromPlaylistObject(playlist, removedSongs, canonSongs) {
  * @param action - the action to perform & some data
  * @returns {*}
  */
-export function playlistReducer(existingData, action) {
+export function libraryDataReducer(existingData, action) {
     let dataCopy = cloneDeep(existingData)
     let payloadSongs = action.payload.songs;
     let payloadSongIds = action.payload.songIds;
@@ -215,7 +253,12 @@ export function playlistReducer(existingData, action) {
             // update the master list of song objects (add reference to the new playlist that these songs belong to)
             addPlaylistToCanonSongs(playlist, payloadSongIds, dataCopy.songs)
             break;
-
+        case SET_ARTIST:
+            let payloadArtist = action.payload.artist;
+            console.log("Setting artist", payloadArtist)
+            payloadArtist.fetchedAllData = true;
+            dataCopy.artists[payloadArtist.id] = payloadArtist
+            break;
         default:
             return dataCopy;
     }

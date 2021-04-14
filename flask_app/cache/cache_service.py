@@ -282,7 +282,12 @@ class CachedAlbum(CachedData):
         return dm.Album.from_db(result)
 
     def getDataFromYTM(self, data_id, extra_data):
-        album_json = getYTMClient().get_album(data_id)
+        try:
+            album_json = getYTMClient().get_album(data_id)
+        except Exception as e:
+            if "HTTP 404" in e:
+                return None
+            raise e
         album = dm.Album.from_json(data_id, album_json)
         persistAlbum(album)
         return album

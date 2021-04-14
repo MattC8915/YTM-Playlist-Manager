@@ -184,7 +184,7 @@ class Album:
         self.description = description
         self.num_tracks = num_tracks
         self.release_date = datetime.fromtimestamp(release_date_timestamp).strftime("%b %d, %Y") \
-            if release_date_timestamp else ""
+            if release_date_timestamp else None
         self.release_date_timestamp = release_date_timestamp
         self.duration = duration
         self.release_type: ReleaseType = release_type
@@ -331,7 +331,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
     if not source_data:
         return []
 
-    logMessage(f"Getting list of songs length {len(source_data)}")
+    logMessage(f"Getting list of songs length [{len(source_data)}] {'from db' if from_db else 'from json'}")
     if include_index:
         songs: List[Song] = [Song.from_db(s, index) for index, s in enumerate(source_data)] \
             if from_db else [Song.from_json(s, index) for index, s in enumerate(source_data)]

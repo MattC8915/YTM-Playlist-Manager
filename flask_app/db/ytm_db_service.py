@@ -120,7 +120,6 @@ def persistPlaylistSongs(playlist_obj):
     :param playlist_obj:
     :return:
     """
-    logMessage(f"Persisting songs to db for playlist [{playlist_obj.name}]")
     new_songs = playlist_obj.songs
     playlist_id = playlist_obj.playlist_id
 
@@ -135,6 +134,7 @@ def persistPlaylistSongs(playlist_obj):
     song_ids_to_delete = existing_song_ids.difference(new_song_ids)
     song_ids_to_add = new_song_ids.difference(existing_song_ids)
     song_ids_to_update = existing_song_ids.intersection(new_song_ids)
+    logMessage(f"Persisting songs to db for playlist [{playlist_obj.name}] ({len(song_ids_to_add)} new)")
 
     # delete songs from songs_in_playlist that have been removed
     if song_ids_to_delete:
@@ -322,10 +322,16 @@ def persistDeletePlaylistAction(playlist_id, playlist_name, through_ytm):
     persistPlaylistAction(action)
 
 
-def persistSongActionFromIds(playlist_id, songs_ids: List[str], through_ytm, success, action_type):
-    playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
-    songs = [getSongsFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in songs_ids]
-    songs = flattenList(songs)
+def persistSongActionFromIds(playlist_id, song_ids: List[str], through_ytm, success, action_type):
+    playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False) if isinstance(playlist_id, str) else playlist_id
+    persistSongActionFromSongIds(playlist, song_ids, through_ytm, success, action_type)
+
+
+def persistSongActionFromSongIds(playlist, song_ids: List[str], through_ytm, success, action_type):
+    songs = [s for s in playlist.songs if s.video_id in song_ids]
+    if len(song_ids) != len(songs):
+        raise Exception("didn't find all songs")
+    # songs = [getSongsFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in song_ids]
     persistSongAction(playlist, songs, through_ytm, success, action_type)
 
 

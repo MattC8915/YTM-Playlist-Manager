@@ -22,7 +22,7 @@ def before_request():
 @app.teardown_request
 def after_request(err):
     diff = time.time() - g.start
-    logMessage(f"Request time: [{diff}] for [{request.full_path}]")
+    logMessage(f"Request time: [{diff}] for [{request.method} {request.full_path}]")
 
 
 def httpResponse(json_data, http_code=200):

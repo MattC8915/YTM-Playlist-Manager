@@ -10,16 +10,18 @@ import {useNavigate} from "@reach/router";
 import {MyToastContext} from "./util/context/MyToastContext";
 import {
     ADD_SONGS,
-    PlaylistContext,
-    playlistReducer,
-    REMOVE_SONGS,
+    LibraryContext,
+    libraryDataReducer,
+    REMOVE_SONGS, SET_ARTIST,
     SET_PLAYLISTS,
     SET_SONGS, SORT_SONGS
-} from "./util/context/PlaylistContext";
+} from "./util/context/LibraryContext";
 import ListenHistory from "./pages/ListenHistory";
 import PlaylistList from "./pages/PlaylistList";
 import Playlist from "./pages/Playlist";
 import Button from "antd/lib/button/button";
+import Artist from "./pages/Artist";
+import Album from "./pages/Album";
 
 export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
@@ -28,8 +30,7 @@ export const ERROR_TOAST = "ERROR";
 
 function App() {
     let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
-        "library", playlistReducer, {"playlists": [], "songs": {}});
-    // let [libraryData, playlistsDispatch] = useReducer(playlistReducer, );
+        "library", libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}});
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
     let [navKey, setNavKey] = useState("library")
@@ -83,6 +84,9 @@ function App() {
         playlistsDispatch({type: SET_PLAYLISTS, payload: {playlists: playlists}})
     }, [playlistsDispatch])
 
+    function setArtist(data) {
+        playlistsDispatch({type: SET_ARTIST, payload: {artist: data}})
+    }
     function setSongsForPlaylist(playlistId, songs, refreshSongs) {
         playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId, refresh: refreshSongs}})
     }
@@ -103,13 +107,15 @@ function App() {
      */
     const loadPlaylists = useCallback((forceRefresh) => {
         // console.log("load playlists")
-        sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
+        return sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
                 setPlaylists(resp);
+                return resp;
             })
             .catch((error) => {
                 console.log(error);
                 addToast("Error loading library", ERROR_TOAST)
+                return error;
             })
     }, [addToast, sendRequest, setPlaylists])
 
@@ -149,9 +155,9 @@ function App() {
 
     return (
       <div>
-          <PlaylistContext.Provider value={{library: libraryData, addSongs: addSongsToPlaylist,
+          <LibraryContext.Provider value={{library: libraryData, addSongs: addSongsToPlaylist,
               setSongs: setSongsForPlaylist, sortSongs: sortSongsForPlaylist,
-              removeSongs: removeSongsFromState}}>
+              removeSongs: removeSongsFromState, setArtist: setArtist}}>
           <MyToastContext.Provider value={{addToast: addToast}}>
               <ToastContainer
                   position="top-right"
@@ -190,9 +196,11 @@ function App() {
                 />
                 <ListenHistory path={"/history"}/>
                 <Playlist path={"/songs/:playlistId"}/>
+                <Artist path={"/artist/:artistId"}/>
+                <Album path={"/album/:albumId"}/>
               </Router>
           </MyToastContext.Provider>
-          </PlaylistContext.Provider>
+          </LibraryContext.Provider>
       </div>
     );
 }

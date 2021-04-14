@@ -73,7 +73,8 @@ def addSongsToPlaylist(playlist_id, song_ids):
     song_id_set = set(song_ids)
 
     # Get all songs already in the playlist (by looking in the db)
-    all_playlist_song_ids = {song.video_id for song in ytm_db_service.getPlaylistSongsFromDb(playlist_id)}
+    playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False)
+    all_playlist_song_ids = {song.video_id for song in playlist.songs}
 
     # find songs from the list that are NOT in this playlist already
     songs_not_in_playlist = song_id_set.difference(all_playlist_song_ids)
@@ -93,10 +94,10 @@ def addSongsToPlaylist(playlist_id, song_ids):
         resp = getYTMClient().add_playlist_items(playlist_id, [dupe])
         updateSongIdListsFromResponse([dupe], resp, success_ids, already_there_ids, failure_ids)
 
-    ytm_db_service.persistSongActionFromIds(playlist_id, [x["videoId"] for x in success_ids], through_ytm=False,
-                                            success=True, action_type=data_models.ActionType.ADD_SONG)
-    ytm_db_service.persistSongActionFromIds(playlist_id, already_there_ids + failure_ids, through_ytm=False,
-                                            success=False, action_type=data_models.ActionType.ADD_SONG)
+    ytm_db_service.persistSongActionFromSongIds(playlist, [x["videoId"] for x in success_ids], through_ytm=False,
+                                                success=True, action_type=data_models.ActionType.ADD_SONG)
+    ytm_db_service.persistSongActionFromSongIds(playlist, already_there_ids + failure_ids, through_ytm=False,
+                                                success=False, action_type=data_models.ActionType.ADD_SONG)
     return success_ids, already_there_ids, failure_ids
 
 
@@ -133,10 +134,10 @@ def removeSongsFromPlaylist(playlist_id, songs):
     song_ids = [s["videoId"] for s in songs]
     if isSuccessFromYTM(resp):
         ytm_db_service.deleteSongsFromPlaylistInDb(playlist_id, [s["setVideoId"] for s in songs])
-        ytm_db_service.persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False,
+        ytm_db_service.persistSongActionFromIds(playlist_id=playlist_id, song_ids=song_ids, through_ytm=False,
                                                 success=True, action_type=data_models.ActionType.REMOVE_SONG)
     else:
-        ytm_db_service.persistSongActionFromIds(playlist_id=playlist_id, songs_ids=song_ids, through_ytm=False,
+        ytm_db_service.persistSongActionFromIds(playlist_id=playlist_id, song_ids=song_ids, through_ytm=False,
                                                 success=True, action_type=data_models.ActionType.REMOVE_SONG)
     return resp
 
