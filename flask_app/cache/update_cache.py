@@ -14,7 +14,7 @@ from db.db_service import executeSQL, executeSQLFetchAll
 
 # to turn a base64 string back into a url: binascii.unhexlify
 from log import logMessage, setupCustomLogger, logException
-from ytm_api.ytm_client import getYTMClient
+from api.ApiFactory import getYoutubeApi
 
 
 def downloadImages():
@@ -66,6 +66,9 @@ def updatePlaylists(playlist_id=None):
             playlist_id = p.playlist_id
             if playlist_id == "LM":
                 continue
+            # p2 = getYoutubeApi().get_playlist_items(playlist_id)
+            # pd = getYoutubeApi().get_playlist_details(playlist_id)
+            # p3 = getYoutubeApi().getYoutubePlaylistFromYoutubeDl(playlist_id)
             p = getPlaylist(playlist_id, ignore_cache=True)
             time.sleep(60)
 
@@ -88,6 +91,8 @@ def updateAlbums(album_id=None):
 
 def updateData():
     setupCustomLogger("update")
+    # updateAlbums("MPREb_vBNcqkQUkZP")
+    # updateAlbums("FEmusic_library_privately_owned_release_detailb_po_CJL5kb-93sWy9gESDW5vIGNlaWxpbmdzIDMaCWxpbCB3YXluZSINaHR0cCB1cGxvYWRlcg")
     updatePlaylists()
     updateAlbums()
     downloadImages()
