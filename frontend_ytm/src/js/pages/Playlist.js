@@ -4,19 +4,14 @@
  * Allows sorting and filtering songs.
  * Shows warning when duplicate songs are found in the playlist.
  */
-import React, {useReducer} from 'react';
+import React from 'react';
 import {useMemo, useCallback, useEffect, useState, useContext} from "react";
 import {ERROR_TOAST} from "../App";
 import {LibraryContext} from "../util/context/LibraryContext";
 import {MyToastContext} from "../util/context/MyToastContext";
 import {useHttp} from "../util/hooks/UseHttp";
 import SongTable from "../components/SongTable";
-import {
-    getDefaultSongPageObject,
-    SET_SONG_DATA,
-    SongPageContext,
-    songPageReducer, useSongPage
-} from "../util/context/SongPageContext";
+import {SongPageContext, useSongPage} from "../util/context/SongPageContext";
 import SongPageHeader from "../components/SongPageHeader";
 
 
@@ -91,7 +86,12 @@ export default function Playlist(props) {
     }, [alreadyFetchedSongs, fetchSongs, playlist, playlistId, songPageData])
 
     useEffect(() => {
-        let headerTitle = <span>{playlist && playlist.title ? playlist.title : ""} <small> ({playlist.songs.length} songs)</small></span>
+        let headerTitle = (
+            <span>
+                {/*I need keys here because of the way antd renders the title (apparently they use .map() without assigning keys)*/}
+                <span key={1}>{playlist && playlist.title ? playlist.title : ""}</span>
+                <small key={2}> ({playlist.songs.length} songs)</small>
+            </span>)
         songPageData.setTitle(headerTitle);
     }, [playlist])
 
