@@ -2,4 +2,4 @@
 export PYTHONPATH='/home/matt/python/playlist_manager/flask_app/'; 
 export PYTHONPATH='$PYTHONPATH:/home/matt/java/mhub4/gather/'; 
 echo $PYTHONPATH; 
-python3 /home/matt/python/playlist_manager/flask_app/cache/update_cache.py"
+python3 /home/matt/python/playlist_manager/flask_app/cache/update_cache.py
