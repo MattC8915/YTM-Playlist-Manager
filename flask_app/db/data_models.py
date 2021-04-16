@@ -197,12 +197,12 @@ class Album:
         thumb_id = self.thumbnail.thumbnail_id if self.thumbnail else self.thumbnail_id
         rel_type = self.release_type.value if self.release_type else None
         return self.album_id, self.name, thumb_id, self.playlist_id, self.description, \
-            self.num_tracks, self.release_date, self.release_date_timestamp, self.duration, rel_type
+               self.num_tracks, self.release_date, self.release_date_timestamp, self.duration, rel_type
 
     @classmethod
     def from_db(cls, db_tuple):
         aid, name, thumbnail_id, playlist_id, description, num_tracks, release_date, \
-            release_date_timestamp, duration, release_type = db_tuple
+        release_date_timestamp, duration, release_type = db_tuple
         return cls(aid, name, None, playlist_id, description, num_tracks, release_date_timestamp, duration,
                    thumbnail_id=thumbnail_id, release_type=release_type)
 
@@ -242,15 +242,19 @@ class Album:
                    num_tracks=num_tracks, release_date_timestamp=rd_timestamp, duration=duration,
                    release_type=rel_type, thumbnail_id=None)
 
-    def to_json(self):
-        return {"id": self.album_id, "name": self.name, "playlist_id": self.playlist_id,
-                "description": self.description, "release_type": self.release_type.value if self.release_type else "",
-                "num_tracks": self.num_tracks, "release_date": self.release_date_timestamp, "duration": self.duration,
-                "thumbnail": self.thumbnail.to_json() if self.thumbnail else {}}
-
+    def to_json(self, index=None):
+        the_json = {"id": self.album_id, "name": self.name, "playlist_id": self.playlist_id,
+                    "description": self.description, "duration": self.duration,
+                    "release_type": self.release_type.value if self.release_type else "",
+                    "num_tracks": self.num_tracks, "release_date": self.release_date_timestamp,
+                    "thumbnail": self.thumbnail.to_json() if self.thumbnail else {}}
+        if index:
+            the_json["index"] = index
+        return the_json
 
 class Artist:
-    def __init__(self, aid, name, thumbnail: Thumbnail, description=None, views=None, channel_id=None, subscribers=None):
+    def __init__(self, aid, name, thumbnail: Thumbnail, description=None, views=None, channel_id=None,
+                 subscribers=None):
         self.artist_id = aid
         if not self.artist_id:
             self.artist_id = dbs.getArtistId(name)
@@ -293,18 +297,19 @@ class Artist:
         return cls(artist_id, artist_name, thumbnail, description, views, channel_id, subscribers)
 
     def to_json(self):
+        albums = [a.to_json(index) for index, a in enumerate(self.albums)]
+        singles = [s.to_json(index) for index, s in enumerate(self.singles)]
         data = {"id": self.artist_id,
                 "name": self.name,
                 "description": self.description,
                 "views": self.views,
                 "channel_id": self.channel_id,
                 "subscribers": self.subscribers,
-                "albums": [a.to_json() for a in self.albums],
-                "singles": [s.to_json() for s in self.singles]
+                "albums": albums,
+                "singles": singles
                 }
         if self.thumbnail:
             data["thumbnail"] = self.thumbnail.to_json()
-
         return data
 
     def to_db(self):
