@@ -2,7 +2,7 @@
   "name": "frontend_ytm",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://mac:5050",
+  "proxy": "http://localhost:5050",
   "dependencies": {
     "@ant-design/icons": "^4.5.0",
     "@babel/core": "^7.13.14",
