@@ -39,6 +39,7 @@ create table if not exists album (
     release_date_timestamp int,
     duration int,
     release_type album_type
+    year int
 );
 
 create table if not exists song(

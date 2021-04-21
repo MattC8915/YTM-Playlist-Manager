@@ -35,18 +35,27 @@ def updateSongInPlaylist(new_song_object, playlist_id):
 
 def persistAlbum(album: 'dm.Album'):
     insert = "INSERT INTO album (id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
-             "release_date_timestamp, duration, release_type) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+             "release_date_timestamp, duration, release_type, year) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
 
     if album.playlist_id:
         insert += "ON CONFLICT ON CONSTRAINT album_pkey DO UPDATE SET name=excluded.name, thumbnail_id=excluded.thumbnail_id, " \
                   "playlist_id=excluded.playlist_id, description=excluded.description, " \
                   "num_tracks=excluded.num_tracks, release_date=excluded.release_date, " \
                   "release_date_timestamp=excluded.release_date_timestamp, duration=excluded.duration, " \
-                  "release_type=excluded.release_type"
+                  "release_type=excluded.release_type, year=excluded.year"
     else:
         insert += "ON CONFLICT DO NOTHING"
     data = album.to_db()
+    persistThumbnail(album.thumbnail)
     executeSQL(insert, data)
+
+
+def persistSong(song: "dm.Song"):
+    # persist the song
+    insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local, is_available) " \
+                  "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_pkey DO NOTHING "
+    song_data = song.to_db()
+    executeSQL(insert_song, song_data)
 
 
 def persistAllSongData(songs_to_add, playlist_id):
@@ -69,11 +78,7 @@ def persistAllSongData(songs_to_add, playlist_id):
                 # persist the album
                 persistAlbum(song.album)
 
-        # persist the song
-        insert_song = "INSERT INTO song (id, name, album_id, length, explicit, is_local, is_available) " \
-                      "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT ON CONSTRAINT song_pkey DO NOTHING "
-        song_data = song.to_db()
-        executeSQL(insert_song, song_data)
+        persistSong(song)
 
         if song.set_video_id and playlist_id:
             # persist the song/playlist relationship
@@ -232,7 +237,7 @@ def getPlaylistsFromDb(convert_to_json=False, playlist_id=None):
     data = None
     if playlist_id:
         # only get data for a specific playlist
-        select += " and p.id = %s"
+        select += " where p.id = %s"
         data = playlist_id,
 
     select += " order by p.name"
@@ -289,7 +294,8 @@ def getPlaylistSongsFromDb(playlist_id, convert_to_json=False):
     :param convert_to_json:
     :return:
     """
-    song_lst = getSongsFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True, get_json=convert_to_json)
+    song_lst = getSongsFromDb(song_id=None, playlist_id=playlist_id, include_song_playlists=True,
+                              get_json=convert_to_json)
     return song_lst
 
 
@@ -323,15 +329,16 @@ def persistDeletePlaylistAction(playlist_id, playlist_name, through_ytm):
 
 
 def persistSongActionFromIds(playlist_id, song_ids: List[str], through_ytm, success, action_type):
-    playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False) if isinstance(playlist_id, str) else playlist_id
+    playlist = cache_service.getPlaylistFromCache(playlist_id, get_json=False) \
+        if isinstance(playlist_id, str) else playlist_id
     persistSongActionFromSongIds(playlist, song_ids, through_ytm, success, action_type)
 
 
 def persistSongActionFromSongIds(playlist, song_ids: List[str], through_ytm, success, action_type):
     songs = [s for s in playlist.songs if s.video_id in song_ids]
-    if len(song_ids) != len(songs):
-        raise Exception("didn't find all songs")
-    # songs = [getSongsFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in song_ids]
+    song_ids_found = [s.video_id for s in songs]
+    song_ids_needed = [s for s in song_ids if s not in song_ids_found]
+    songs += getSongsFromDb(song_id=song_ids_needed, playlist_id=None, include_song_playlists=False)
     persistSongAction(playlist, songs, through_ytm, success, action_type)
 
 

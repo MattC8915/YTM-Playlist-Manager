@@ -3,6 +3,7 @@ This service determines whether data should be retrieved from the database or th
 """
 from datetime import datetime, timedelta
 from enum import Enum
+from typing import List
 
 from db import data_models as dm
 from db.data_models import getThumbnailId
@@ -10,7 +11,7 @@ from db.db_service import executeSQLFetchOne, executeSQL, executeSQLFetchAll
 from db.listening_history import getHistoryAsPlaylist, persistHistory, \
     getHistoryAsPlaylistShell
 from db import ytm_db_service as ytmdbs
-from db.ytm_db_service import persistAlbum
+from db.ytm_db_service import persistAlbum, persistSong
 from log import logMessage
 from util import iterableToDbTuple
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
@@ -225,10 +226,12 @@ class CachedThumbnail(CachedData):
     def __init__(self):
         super().__init__()
         self.data_type = DataType.THUMBNAIL
+        self.select_sql = 'SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download ' \
+                          'where thumbnail_id = %s'
+        self.select_many = self.select_sql.replace("where thumbnail_id =", "where thumbnail_id in")
 
     def getDataFromDb(self, data_id, extra_data):
-        select = "SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download " \
-                 "where thumbnail_id = %s"
+        select = self.select_sql
         size = extra_data.get("size")
         data = data_id,
         if size:
@@ -244,8 +247,7 @@ class CachedThumbnail(CachedData):
     def getListFromDb(self, data_ids: list, extra_data):
         if not data_ids:
             return []
-        select = "SELECT thumbnail_id, downloaded, size, filepath from thumbnail_download " \
-                 "where thumbnail_id in %s"
+        select = self.select_many
         size = extra_data.get("size", None)
         data = iterableToDbTuple(data_ids),
         if size:
@@ -265,20 +267,24 @@ class CachedThumbnail(CachedData):
 
 
 class CachedAlbum(CachedData):
-    def getListFromDb(self, data_ids, extra_data):
-        pass
 
     def __init__(self):
         super().__init__()
         self.data_type = DataType.ALBUM
+        self.select_sql = "SELECT id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
+                          "release_date_timestamp, duration, release_type, year " \
+                          "FROM album " \
+                          "WHERE id = %s"
+        self.select_many = self.select_sql.replace("WHERE id =", "WHERE id in")
+
+    def getListFromDb(self, data_ids, extra_data):
+        data = iterableToDbTuple(data_ids),
+        result = executeSQLFetchAll(self.select_many, data)
+        return [dm.Album.from_db(r) for r in result]
 
     def getDataFromDb(self, data_id, extra_data):
-        select = "SELECT id, name, thumbnail_id, playlist_id, description, num_tracks, release_date, " \
-                 "release_date_timestamp, duration, release_type " \
-                 "FROM album " \
-                 "WHERE id = %s"
         data = data_id,
-        result = executeSQLFetchOne(select, data)
+        result = executeSQLFetchOne(self.select_sql, data)
         return dm.Album.from_db(result)
 
     def getDataFromYTM(self, data_id, extra_data):
@@ -288,8 +294,14 @@ class CachedAlbum(CachedData):
             if "HTTP 404" in str(e):
                 return None
             raise e
+        # TODO what does data look like when an album track has multiple artists
+        # TODO next need to get artist data??
         album = dm.Album.from_json(data_id, album_json)
+        songs = [dm.Song.from_json(s) for s in album_json.get("tracks", [])]
+        album.songs = songs
         persistAlbum(album)
+        for s in songs:
+            persistSong(s)
         return album
 
 
@@ -303,6 +315,19 @@ class CachedArtist(CachedData):
 
     def getDataFromDb(self, data_id, extra_data):
         return self.getDataFromYTM(data_id, extra_data)
+
+    @staticmethod
+    def getAlbumsFromDbAndMerge(artist: dm.Artist, albums: List[dm.Album], singles: List[dm.Album]):
+        album_ids = [a.album_id for a in albums]
+        single_ids = [s.album_id for s in singles]
+
+        db_albums = getAlbums(album_ids + single_ids)
+
+        album_merge = [next((dba for dba in db_albums if dba.album_id == a.album_id), None) or a for a in albums]
+        single_merge = [next((dba for dba in db_albums if dba.album_id == s.album_id), None) or s for s in singles]
+
+        artist.albums = album_merge
+        artist.singles = single_merge
 
     def getDataFromYTM(self, data_id, extra_data):
         artist = getYTMClient().get_artist(data_id)
@@ -318,8 +343,9 @@ class CachedArtist(CachedData):
             if singles_browse_id and singles_params else artist.get("singles", {}).get("results", [])
 
         artist = dm.Artist.from_json(artist)
-        artist.albums = [dm.Album.from_json(album_id=None, album_json=a, release_type="ALBUM") for a in albums]
-        artist.singles = [dm.Album.from_json(album_id=None, album_json=s, release_type="SINGLE") for s in singles]
+        albums = [dm.Album.from_json(album_id=None, album_json=a, release_type="ALBUM") for a in albums]
+        singles = [dm.Album.from_json(album_id=None, album_json=s, release_type="SINGLE") for s in singles]
+        self.getAlbumsFromDbAndMerge(artist, albums, singles)
         return artist
 
 
@@ -393,8 +419,26 @@ def getThumbnail(thumbnail_id, ignore_cache=False, size=None):
                                    extra_data=extra_data)
 
 
-def getAlbum(album_id, ignore_cache=False):
-    return album_cache.getData(album_id, ignore_cache)
+def getAlbum(album_id, ignore_cache=False, get_json=False):
+    return album_cache.getData(album_id, ignore_cache, get_json=get_json)
+
+
+def getAlbums(album_ids, ignore_cache=False):
+    # get album objects
+    albums = album_cache.getListFromDb(album_ids, ignore_cache)
+
+    # map thumbnails to their albums
+    thumbnail_id_map = {}
+    for a in albums:
+        thumbnail_id_map[a.thumbnail_id] = a
+
+    # get thumbnails, and set them for each album
+    thumbnails: List[dm.Thumbnail] = getListOfThumbnails(list(thumbnail_id_map.keys()))
+    for t in thumbnails:
+        alb = thumbnail_id_map[t.thumbnail_id]
+        alb.thumbnail = t
+
+    return albums
 
 
 def getArtist(artist_id, ignore_cache=False, get_json=False):

@@ -91,11 +91,10 @@ def updateAlbums(album_id=None):
 
 def updateData():
     setupCustomLogger("update")
-    # updateAlbums("MPREb_vBNcqkQUkZP")
     # updateAlbums("FEmusic_library_privately_owned_release_detailb_po_CJL5kb-93sWy9gESDW5vIGNlaWxpbmdzIDMaCWxpbCB3YXluZSINaHR0cCB1cGxvYWRlcg")
     updatePlaylists()
     updateAlbums()
-    downloadImages()
+    # downloadImages()
 
 
 if __name__ == '__main__':

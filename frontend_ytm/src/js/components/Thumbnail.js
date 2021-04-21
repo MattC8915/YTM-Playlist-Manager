@@ -29,11 +29,11 @@ export default function Thumbnail(props) {
                     height={props.size}
                     loading={"lazy"}
                     src={src}
-                    onClick={(e) => {
-                        if (videoId) {
-                            setShouldEmbed(!shouldEmbed)
-                        }
-                    }}
+                    // onClick={(e) => {
+                    //     if (videoId) {
+                    //         setShouldEmbed(!shouldEmbed)
+                    //     }
+                    // }}
                 />
             )}
         </div>

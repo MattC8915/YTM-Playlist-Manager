@@ -3,16 +3,14 @@ import {SyncOutlined} from "@ant-design/icons";
 import Checkbox from "antd/lib/checkbox/Checkbox";
 import React, {useContext} from "react";
 import {SongPageContext} from "../util/context/SongPageContext";
-import {useNavigate} from "@reach/router";
 
 
 export default function SongPageHeader() {
     let songTableContext = useContext(SongPageContext)
     let pageData = songTableContext.data
-    let nav = useNavigate();
     return (
         <PageHeader
-            onBack={()=> nav("/")}
+            onBack={()=> window.history.back()}
             title={(
                 <div>{pageData.title}
                     {" "}
@@ -21,7 +19,7 @@ export default function SongPageHeader() {
                         <SyncOutlined />
                     </Button>
                     {" "}
-                    {(pageData.numDuplicates > 0) && (
+                    {pageData.showDuplicateCount && pageData.numDuplicates > 0 && (
                         <Button onClick={() => pageData.setFilteringByDupes(!pageData.filteringByDupes)}>
                             <Badge count={`Dupes found (${pageData.numDuplicates})`}/>
                         </Button>

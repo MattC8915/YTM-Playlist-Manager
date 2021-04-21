@@ -12,7 +12,7 @@ import {
     ADD_SONGS,
     LibraryContext,
     libraryDataReducer,
-    REMOVE_SONGS, SET_ARTIST,
+    REMOVE_SONGS, SET_ALBUM, SET_ARTIST,
     SET_PLAYLISTS,
     SET_SONGS, SORT_SONGS
 } from "./util/context/LibraryContext";
@@ -29,8 +29,9 @@ export const WARNING_TOAST = "WARNING";
 export const ERROR_TOAST = "ERROR";
 
 function App() {
-    let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
-        "library", libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}});
+    // let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
+    //     "library", libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}});
+    let [libraryData, playlistsDispatch] = useReducer(libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}})
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
     let [navKey, setNavKey] = useState("library")
@@ -87,14 +88,17 @@ function App() {
     function setArtist(data) {
         playlistsDispatch({type: SET_ARTIST, payload: {artist: data}})
     }
+    function setAlbum(data) {
+        playlistsDispatch({type: SET_ALBUM, payload: {album: data}})
+    }
     function setSongsForPlaylist(playlistId, songs, refreshSongs) {
         playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId, refresh: refreshSongs}})
     }
     function sortSongsForPlaylist(playlistId, songs) {
-        playlistsDispatch({type: SORT_SONGS, payload: {songIds: songs, playlistId: playlistId}})
+        playlistsDispatch({type: SORT_SONGS, payload: {songs: songs, playlistId: playlistId}})
     }
     function addSongsToPlaylist(playlistId, songs) {
-        playlistsDispatch({type: ADD_SONGS, payload: {songIds: songs, playlistId: playlistId}})
+        playlistsDispatch({type: ADD_SONGS, payload: {songs: songs, playlistId: playlistId}})
     }
     function removeSongsFromState(playlistId, songs) {
         playlistsDispatch({type: REMOVE_SONGS, payload: {songs: songs, playlistId: playlistId}})
@@ -148,7 +152,6 @@ function App() {
                 break;
         }
         if (shouldSetNavKey) {
-            console.log("setting nav key")
             setNavKey(e.key)
         }
     }
@@ -157,7 +160,7 @@ function App() {
       <div>
           <LibraryContext.Provider value={{library: libraryData, addSongs: addSongsToPlaylist,
               setSongs: setSongsForPlaylist, sortSongs: sortSongsForPlaylist,
-              removeSongs: removeSongsFromState, setArtist: setArtist}}>
+              removeSongs: removeSongsFromState, setArtist: setArtist, setAlbum: setAlbum}}>
           <MyToastContext.Provider value={{addToast: addToast}}>
               <ToastContainer
                   position="top-right"

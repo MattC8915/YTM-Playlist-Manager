@@ -14,6 +14,7 @@ export const SORT_SONGS = "SORT_SONGS"
 export const ADD_SONGS = "ADD_SONGS"
 export const REMOVE_SONGS = "REMOVE_SONGS"
 export const SET_ARTIST = "SET_ARTIST"
+export const SET_ALBUM = "SET_ALBUM"
 
 
 function getArtistString(songs) {
@@ -57,7 +58,7 @@ export function groupSongsByAlbum(songs) {
         let songsInAlbum = songs.filter((song) => song.album.id === album.id)
         // count how many times an artist appears in the album
         album.artistsString = getArtistString(songsInAlbum)
-        album.albumString = album.name;
+        album.albumString = album.title;
         album.children = songsInAlbum;
         album.thumbnail = songsInAlbum[0].thumbnail;
         album.duration = songsInAlbum.length;
@@ -116,6 +117,7 @@ function differentThumbnails(song1, song2) {
 function addSongsToMasterList(existingSongs, newSongs, forceUpdate) {
     newSongs.forEach((s) => {
         let newSong = cloneDeep(s)
+        // find this song if it's already in the list
         let existingSong = existingSongs[newSong.videoId]
         let shouldUpdate = forceUpdate
             || !existingSong
@@ -127,6 +129,19 @@ function addSongsToMasterList(existingSongs, newSongs, forceUpdate) {
             delete newSong.isDupe;
             delete newSong.renderOtherPlaylists
             existingSongs[newSong.videoId] = newSong;
+        }
+    })
+}
+
+function addAlbumsToMasterList(existingAlbums, newAlbums, forceUpdate) {
+    newAlbums.forEach((a) => {
+        let newAlbum = cloneDeep(a);
+        let existingAlbum = existingAlbums[newAlbum.id]
+        let shouldUpdate = forceUpdate
+            || !existingAlbum
+            || existingAlbum.description !== newAlbum.description;
+        if (shouldUpdate) {
+            existingAlbums[newAlbum.id] = newAlbum;
         }
     })
 }
@@ -149,17 +164,25 @@ function getSongIds(songs) {
  * @param newSongs
  * @param canonSongs
  */
-function addPlaylistToCanonSongs(playlist, newSongs, canonSongs) {
+function addCanonSongToPlaylist(playlist, newSongs, canonSongs) {
     newSongs.forEach((song) => {
         let newVideoId = song.videoId
         let newSetVideoId = song.setVideoId
         let canonSong = canonSongs[newVideoId]
         if (canonSong) {
-            canonSong.playlists.push({playlistId: playlist.playlistId, playlistName: playlist.title,
-                videoId: newVideoId, setVideoId: newSetVideoId, index: song.index})
+            if (playlist && canonSong.playlists) {
+                canonSong.playlists.push({playlistId: playlist.playlistId, playlistName: playlist.title,
+                    videoId: newVideoId, setVideoId: newSetVideoId, index: song.index})
+            } else if (playlist) {
+                canonSong.playlists = [playlist]
+            }
         } else {
-            throw Error("THIS SHOULDN'T HAPPEN -- ADD")
-            // canonSongs[song.videoId] = song
+            song.playlists = song.playlists ?
+                song.playlists :
+                playlist ?
+                    [playlist] :
+                    []
+            canonSongs[song.videoId] = song
         }
     })
 }
@@ -191,15 +214,14 @@ function removeSongsFromPlaylistObject(playlist, removedSongs, canonSongs) {
 export function libraryDataReducer(existingData, action) {
     let dataCopy = cloneDeep(existingData)
     let payloadSongs = action.payload.songs;
-    let payloadSongIds = action.payload.songIds;
 
     // find the playlist we're trying to modify
     let playlistId = action.payload.playlistId;
     let playlist = dataCopy.playlists.find((pl) => pl.playlistId === playlistId)
 
     // if it doesn't exist yet: create it
-    if (!playlist) {
-        playlist = {playlistId: action.payload.playlistId}
+    if (!playlist && playlistId) {
+        playlist = {playlistId: playlistId}
         dataCopy.playlists.push(playlist)
     }
 
@@ -242,23 +264,28 @@ export function libraryDataReducer(existingData, action) {
             break;
         case SORT_SONGS:
             // This is called when the sorting for a playlist changes
-            playlist.songs = getSongIds(payloadSongIds);
+            playlist.songs = getSongIds(payloadSongs);
             break;
         case ADD_SONGS:
             // This is called after I add some songs to a playlist and they are added successfully
 
             // add to the list of songs for this playlist
-            playlist.songs.push(...getSongIds(payloadSongIds))
+            playlist.songs.push(...getSongIds(payloadSongs))
             playlist.numSongs = playlist.songs.length;
             // update the master list of song objects (add reference to the new playlist that these songs belong to)
-            addPlaylistToCanonSongs(playlist, payloadSongIds, dataCopy.songs)
+            addCanonSongToPlaylist(playlist, payloadSongs, dataCopy.songs)
             break;
         case SET_ARTIST:
             let payloadArtist = action.payload.artist;
-            console.log("Setting artist", payloadArtist)
             payloadArtist.fetchedAllData = true;
             dataCopy.artists[payloadArtist.id] = payloadArtist
+            addAlbumsToMasterList(dataCopy.albums, payloadArtist.singles)
+            addAlbumsToMasterList(dataCopy.albums, payloadArtist.albums)
             break;
+        case SET_ALBUM:
+            let payloadAlbum = action.payload.album;
+            payloadAlbum.fetchedAllData = true;
+            addAlbumsToMasterList(dataCopy.albums, [payloadAlbum])
         default:
             return dataCopy;
     }
@@ -286,7 +313,7 @@ function reformatSongObjects(tracks) {
             track.playlistsString = ""
         }
         // set this to the name of the album
-        track.albumString = track.album ? track.album.name : ""
+        track.albumString = track.album ? track.album.title : ""
         // get the thumbnail from the artist object
         track.thumbnail = track.album ? track.album.thumbnail : null;
     });

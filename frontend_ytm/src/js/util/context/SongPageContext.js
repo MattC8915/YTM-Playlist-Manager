@@ -3,27 +3,52 @@ import {cloneDeep} from "./LibraryContext";
 
 export const SongPageContext = createContext("")
 
-export function getSongPageConfig(showAddToButton, showRemoveFromButton, showAlbumView, showSearchBar) {
-    
-}
-export function useSongPage(showAddToButton, showRemoveFromButton, showAlbumView, showSearchBar){
-    let defaultVal = {
-        songs: [],
-        numDuplicates: 0,
-        title: "",
-        selectedRowIds: [],
-        playlistId: null,
-        filterByDupes: false,
-        isDataLoading: false,
-        albumView: false,
-        hideAlbums: false,
-        hideSingles: true,
+export const ReleaseType = Object.freeze({
+    ALBUM: "ALBUM",
+    EP: "EP",
+    SINGLE: "SINGLE",
+    SONG: "SONG",
 
-        showAddToButton: showAddToButton, 
-        showRemoveFromButton: showRemoveFromButton,
-        showAlbumView: showAlbumView,
-        showSearchBar: showSearchBar
+    isAlbum: function (releaseType) {
+        return [this.ALBUM, this.EP, this.SINGLE].includes(releaseType)
     }
+})
+
+export class SongList {
+    constructor(title, songs, displayTitle, priority, releaseType, prepFunction, tableColumns, paginationPosition, stickyConfig) {
+        this.title = title
+        this.songs = songs
+        this.displayTitle = displayTitle
+        this.priority = priority
+        this.releaseType = releaseType
+        this.prepFunction = prepFunction
+        this.tableColumns = tableColumns
+        this.paginationPosition = paginationPosition
+        this.stickyConfig = stickyConfig
+    }
+}
+class SongPageData {
+    constructor(showAddToButton, showRemoveFromButton, showAlbumView, showSearchBar, showDuplicateCount) {
+        this.songLists = []
+        this.numDuplicates = 0
+        this.title = ""
+        this.selectedRowIds = []
+        this.playlistId = null
+        this.filterByDupes = false
+        this.isDataLoading = false
+        this.albumView = false
+        this.hideAlbums = false
+        this.hideSingles = true
+
+        this.showAddToButton = showAddToButton
+        this.showRemoveFromButton = showRemoveFromButton
+        this.showAlbumView = showAlbumView
+        this.showSearchBar = showSearchBar
+        this.showDuplicateCount = showDuplicateCount
+    }
+}
+export function useSongPage(showAddToButton, showRemoveFromButton, showAlbumView, showSearchBar, showDuplicateCount){
+    let defaultVal = new SongPageData(showAddToButton, showRemoveFromButton, showAlbumView, showSearchBar, showDuplicateCount)
 
     let [data, dispatch] = useReducer(songPageReducer, null, () => defaultVal)
     data.setSongData = function(val) {
@@ -56,7 +81,7 @@ export function useSongPage(showAddToButton, showRemoveFromButton, showAlbumView
     data.setHideSingles = function(val) {
         dispatch({type: SET_HIDE_SINGLES, payload: val})
     }
-    return [data, dispatch]
+    return data
 }
 
 export const SET_SONG_DATA = "SET_SONG_DATA";
@@ -75,7 +100,11 @@ export function songPageReducer(existingData, action) {
     let newVal = action.payload;
     switch (action.type) {
         case SET_SONG_DATA:
-            dataCopy.songs = newVal;
+            if (!Array.isArray(newVal)) {
+                newVal = [newVal]
+            }
+            newVal = newVal.sort((songList1, songList2) => songList1.priority - songList2.priority)
+            dataCopy.songLists = newVal;
             break;
         case SET_NUM_DUPLICATES:
             dataCopy.numDuplicates = newVal;
@@ -108,4 +137,8 @@ export function songPageReducer(existingData, action) {
             break;
     }
     return dataCopy
+}
+
+export function isAlbumRow(row) {
+    return row.children && row.children.length > 0;
 }

@@ -11,26 +11,146 @@ import {LibraryContext} from "../util/context/LibraryContext";
 import {MyToastContext} from "../util/context/MyToastContext";
 import {useHttp} from "../util/hooks/UseHttp";
 import SongTable from "../components/SongTable";
-import {SongPageContext, useSongPage} from "../util/context/SongPageContext";
+import {isAlbumRow, ReleaseType, SongList, SongPageContext, useSongPage} from "../util/context/SongPageContext";
 import SongPageHeader from "../components/SongPageHeader";
+import Thumbnail from "../components/Thumbnail";
+import {Button, Popover} from "antd";
+import {Link} from "@reach/router";
 
 
 export function songsExist(playlist) {
     return playlist && playlist.songs && playlist.songs.length > 0;
 }
+export function renderSongLinkToYtm(text, record) {
+    let url = record.album && record.album.playlist_id
+        ? `https://music.youtube.com/playlist?list=${record.album.playlist_id}`
+        : `https://music.youtube.com/watch?v=${record.videoId}`
+    return <a href={url} target={"_blank"} rel={"noopener noreferrer"}>{text}</a>
+}
+
+export function renderArtistLinkToLocal(text, record) {
+    if (isAlbumRow(record)) {
+        return record.artistsString
+    }
+    return record.artists
+        ? record.artists.map((artist, index) => [
+            index > 0 && ", ",
+            <Link key={index} to={"/artist/" + artist.id}>{artist.name}</Link>
+        ])
+        : ""
+}
+
+export function renderAlbumLinkToLocal(text, record) {
+    if (isAlbumRow(record) && record.id){
+        return record.albumString ? <Link to={"/album/" + record.id}>{record.albumString}</Link> : "loosies"
+    }
+    // noinspection JSUnresolvedVariable
+    return record.album && record.album.id
+        ? <Link to={"/album/" + record.album.id}>{record.albumString}</Link>
+        : ""
+}
+
+export function renderIndexWithMetadata(text, record) {
+    let approvedProperties = ["index", "videoId", "setVideoId", "album", "artists", "playlists",
+        "thumbnail", "id", "name", "url", "filepath", "playlistId", "playlistName"]
+    return (
+        <Popover style={{borderWidth: '2px !important', borderStyle: 'solid !important'}}
+                 trigger={"click"}
+                 content={(
+                     <pre>
+                                    <code>
+                                        {JSON.stringify(record, approvedProperties, 2)}
+                                    </code>
+                                </pre>
+                 )}>
+            <Button>{text}</Button>
+        </Popover>
+    )
+}
+const columns = [
+    {
+        title: "Thumbnail",
+        dataIndex: "thumbnail",
+        key: "thumbnail",
+        render: (text, record) => {
+            return (
+                <Thumbnail size={60} data={record}/>
+            )
+        },
+    },
+    {
+        title: "Title",
+        dataIndex: "title",
+        key: "title",
+        sorter: true,
+        selectable: true,
+        render: renderSongLinkToYtm
+    },
+    {
+        title: "Artist",
+        dataIndex: "artistsString",
+        key: "artistsString",
+        sorter: true,
+        render: renderArtistLinkToLocal
+    },
+    {
+        title: "Album",
+        dataIndex: "albumString",
+        key: "albumString",
+        sorter: true,
+        render: renderAlbumLinkToLocal
+    },
+    {
+        title: "Length",
+        dataIndex: "duration",
+        key: "duration",
+        sorter: true
+    },
+    {
+        title: "Playlists",
+        dataIndex: "renderOtherPlaylists",
+        key: "renderOtherPlaylists",
+        sorter: true
+    },
+    {
+        title: "Index",
+        dataIndex: "index",
+        key: "index",
+        sorter: true,
+        render: renderIndexWithMetadata
+    },
+]
+
+/**
+ * Set necessary fields on the song object so the SongTable renders and functions correctly
+ * @param canonSong the canon song object from the LibraryContext
+ * @param playlistSong contains playlist-specific fields like setVideoId, isDupe, and playlist index
+ */
+function preparePlaylistSongForTable(canonSong, playlistSong) {
+    canonSong.setVideoId = playlistSong.setVideoId
+    canonSong.id = playlistSong.setVideoId
+    playlistSong.id = playlistSong.setVideoId
+    canonSong.isDupe = playlistSong.isDupe
+    if (!canonSong.setVideoId) {
+        // this is necessary because songs in history don't have a setVideoId
+        // (We don't need to worry about duplicate videoIds bc YTM should make sure a song doesn't appear in history twice)
+        playlistSong.setVideoId = playlistSong.videoId;
+    }
+}
 
 export default function Playlist(props) {
-    let playlistContext = useContext(LibraryContext);
+    let libraryContext = useContext(LibraryContext);
     let toastContext = useContext(MyToastContext);
     let sendRequest = useHttp();
     let [alreadyFetchedSongs, setAlreadyFetchedSongs] = useState(false);
     let [filteringByDupes, setFilteringByDupes] = useState(false);
     let playlistId = props.playlistId
+    let songList = new SongList("playlist", [], false, 1, ReleaseType.SONG,
+        preparePlaylistSongForTable, columns, ["topRight", "bottomRight"], {offsetHeader: 50+66+24});
+    let songPageData =
+        useSongPage(true, !props.hideRemoveButton, true, true, !props.hideDupeCount)
 
-    let [songPageData, songPageDispatch] =
-        useSongPage(true, true, true, true)
-
-    let library = playlistContext.library;
+    let library = libraryContext.library;
     let playlist = useMemo(() => {
         return library.playlists.find((pl) => pl.playlistId === playlistId)  || {"songs": []}
     }, [library.playlists, playlistId])
@@ -46,7 +166,7 @@ export default function Playlist(props) {
             .then((resp) => {
                 songPageData.setIsDataLoading(false);
                 let songs = resp.tracks
-                playlistContext.setSongs(playlistId, songs, forceRefresh)
+                libraryContext.setSongs(playlistId, songs, forceRefresh)
                 return songs;
             })
             .catch((resp) => {
@@ -56,9 +176,10 @@ export default function Playlist(props) {
                 toastContext.addToast("Error loading data", ERROR_TOAST)
                 return []
             })
-    }, [playlistContext, playlistId, sendRequest, songPageData, toastContext])
+    }, [libraryContext, playlistId, sendRequest, songPageData, toastContext])
 
     useEffect(() => {
+        // filter out duplicates if necessary
         let songs = playlist.songs
         // only display duplicate songs (if requested)
         let dupes = songs.filter((song) => song.isDupe)
@@ -69,9 +190,10 @@ export default function Playlist(props) {
             }
             return dupes;
         }
-        songPageData.setSongData(songs)
+        songList.songs = songs
+        songPageData.setSongData(songList)
         songPageData.setNumDuplicates(dupes.length)
-    }, [filteringByDupes, playlist.songs])
+    }, [filteringByDupes, playlist.songs]) // ignored songList, songPageData
 
     useEffect(() => {
         // fetch song data from backend if not done already
@@ -83,7 +205,7 @@ export default function Playlist(props) {
         if (playlistId !== songPageData.playlistId) {
             songPageData.setPlaylistId(playlistId)
         }
-    }, [alreadyFetchedSongs, fetchSongs, playlist, playlistId, songPageData])
+    }, [alreadyFetchedSongs, fetchSongs, playlist, playlistId, songPageData.playlistId]) // ignored songPageData
 
     useEffect(() => {
         let headerTitle = (
@@ -93,21 +215,20 @@ export default function Playlist(props) {
                 <small key={2}> ({playlist.songs.length} songs)</small>
             </span>)
         songPageData.setTitle(headerTitle);
-    }, [playlist])
+    }, [playlist]) // songPageData ignored
+
 
     // noinspection JSUnusedGlobalSymbols
     return (
-        <div>
-            <SongPageContext.Provider value={{data: songPageData, fetchData: fetchSongs}}>
+        <SongPageContext.Provider value={{data: songPageData, fetchData: fetchSongs}}>
 
-                {/* Page header with refresh and back buttons */}
-                <SongPageHeader/>
+            {/* Page header with refresh and back buttons */}
+            <SongPageHeader/>
 
-                {/*Table with all the songs*/}
-                <SongTable/>
+            {/*Table with all the songs*/}
+            <SongTable/>
 
-            </SongPageContext.Provider>
+        </SongPageContext.Provider>
 
-        </div>
     );
 }
