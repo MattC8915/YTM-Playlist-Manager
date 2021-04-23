@@ -120,7 +120,7 @@ export default function Artist(props) {
             {artistData && (
                 <div>
                     <div style={{float:"left", paddingRight: "1em"}}>
-                        <Thumbnail data={artistData} size={300}/>
+                        <Thumbnail data={artistData} size={200}/>
                     </div>
                     <p>{artistData.description}</p>
                 </div>

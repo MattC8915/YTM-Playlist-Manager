@@ -13,7 +13,7 @@ from db.listening_history import getHistoryAsPlaylist, persistHistory, \
 from db import ytm_db_service as ytmdbs
 from db.ytm_db_service import persistAlbum, persistSong
 from log import logMessage
-from util import iterableToDbTuple
+from util import iterableToDbTuple, SONG_THUMBNAIL_SIZE
 from ytm_api.ytm_client import getYTMClient, setupYTMClient
 from ytm_api.ytm_service import findDuplicatesAndAddFlag
 
@@ -256,7 +256,10 @@ class CachedThumbnail(CachedData):
         result = executeSQLFetchAll(select, data)
         all_thumbnails = []
         for r in result:
-            data_ids.remove(r[0])
+            try:
+                data_ids.remove(r[0])
+            except ValueError:
+                pass
             all_thumbnails.append(dm.Thumbnail.from_db(r))
         for not_found in data_ids:
             all_thumbnails.append(dm.Thumbnail(not_found, None, size, False))
@@ -267,7 +270,6 @@ class CachedThumbnail(CachedData):
 
 
 class CachedAlbum(CachedData):
-
     def __init__(self):
         super().__init__()
         self.data_type = DataType.ALBUM
@@ -294,14 +296,21 @@ class CachedAlbum(CachedData):
             if "HTTP 404" in str(e):
                 return None
             raise e
+
         # TODO what does data look like when an album track has multiple artists
         # TODO next need to get artist data??
-        album = dm.Album.from_json(data_id, album_json)
-        songs = [dm.Song.from_json(s) for s in album_json.get("tracks", [])]
+        album = dm.Album.from_json(data_id, album_json, thumbnail_size=extra_data.get("size"))
+
+        album_artists = [dm.Artist.from_json(a) for a in album_json.get("artist", [])]
+        album_artists_map = {a.name: a for a in album_artists}
+
+        songs = [dm.Song.from_json(s, album_artists=album_artists_map) for s in album_json.get("tracks", [])]
         album.songs = songs
+
         persistAlbum(album)
         for s in songs:
             persistSong(s)
+
         return album
 
 
@@ -419,8 +428,9 @@ def getThumbnail(thumbnail_id, ignore_cache=False, size=None):
                                    extra_data=extra_data)
 
 
-def getAlbum(album_id, ignore_cache=False, get_json=False):
-    return album_cache.getData(album_id, ignore_cache, get_json=get_json)
+def getAlbum(album_id, ignore_cache=False, get_json=False, size=SONG_THUMBNAIL_SIZE):
+    extra_data = {"size": size}
+    return album_cache.getData(album_id, ignore_cache, get_json=get_json, extra_data=extra_data)
 
 
 def getAlbums(album_ids, ignore_cache=False):

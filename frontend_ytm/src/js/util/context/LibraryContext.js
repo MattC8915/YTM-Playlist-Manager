@@ -139,7 +139,9 @@ function addAlbumsToMasterList(existingAlbums, newAlbums, forceUpdate) {
         let existingAlbum = existingAlbums[newAlbum.id]
         let shouldUpdate = forceUpdate
             || !existingAlbum
-            || existingAlbum.description !== newAlbum.description;
+            || existingAlbum.description !== newAlbum.description
+            || !existingAlbum.songs
+            || existingAlbum.songs.length <= newAlbum.songs.length;
         if (shouldUpdate) {
             existingAlbums[newAlbum.id] = newAlbum;
         }
@@ -286,6 +288,7 @@ export function libraryDataReducer(existingData, action) {
             let payloadAlbum = action.payload.album;
             payloadAlbum.fetchedAllData = true;
             addAlbumsToMasterList(dataCopy.albums, [payloadAlbum])
+            break;
         default:
             return dataCopy;
     }

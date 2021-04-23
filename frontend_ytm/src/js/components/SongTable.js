@@ -369,6 +369,15 @@ export default function SongTable() {
                     Remove from playlist
                 </Button>
             }
+
+            {/*Button to de-select all songs*/}
+            <Button type={"primary"}
+                    style={{marginLeft: "10px"}}
+                    disabled={pageData.selectedRowIds.length === 0}
+                    onClick={() => pageData.setSelectedRowIds([])}>
+                De-select All ({pageData.selectedRowIds.length})
+            </Button>
+
             {pageData.showSearchBar &&
                 // Search songs in playlist
                 <Input.Search

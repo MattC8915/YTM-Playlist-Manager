@@ -25,14 +25,6 @@ export default function SongPageHeader() {
                         </Button>
                     )}
 
-                    {/*Button to de-select all songs*/}
-                    <Button type={"primary"}
-                            style={{marginLeft: "50px"}}
-                            disabled={pageData.selectedRowIds.length === 0}
-                            onClick={() => pageData.setSelectedRowIds([])}>
-                        De-select All ({pageData.selectedRowIds.length})
-                    </Button>
-
                     {/*Group by albums checkbox*/}
                     {pageData.showAlbumView &&
                         <Checkbox

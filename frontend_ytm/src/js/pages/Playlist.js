@@ -52,18 +52,20 @@ export function renderAlbumLinkToLocal(text, record) {
 
 export function renderIndexWithMetadata(text, record) {
     let approvedProperties = ["index", "videoId", "setVideoId", "album", "artists", "playlists",
-        "thumbnail", "id", "name", "url", "filepath", "playlistId", "playlistName"]
+        "thumbnail", "id", "name", "url", "filepath", "playlistId", "playlistName", "release_date", "release_year", "songs", "children"]
     return (
         <Popover style={{borderWidth: '2px !important', borderStyle: 'solid !important'}}
                  trigger={"click"}
                  content={(
                      <pre>
-                                    <code>
-                                        {JSON.stringify(record, approvedProperties, 2)}
-                                    </code>
-                                </pre>
+                         <code>
+                             {JSON.stringify(record, approvedProperties, 2)}
+                         </code>
+                     </pre>
                  )}>
-            <Button>{text}</Button>
+            <Button>
+                {text}
+            </Button>
         </Popover>
     )
 }

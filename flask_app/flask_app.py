@@ -7,6 +7,7 @@ from flask import Flask, request, send_file, make_response, g
 
 from cache import cache_service as cs
 from log import setupCustomLogger, logMessage
+from util import ALBUM_PAGE_THUMBNAIL_SIZE
 from ytm_api import ytm_service
 
 app = Flask(__name__)
@@ -125,7 +126,7 @@ def getAlbumEndpoint(album_id):
     :return:
     """
     ignore_cache = shouldIgnoreCache(request_args=request.args)
-    result = cs.getAlbum(album_id, ignore_cache, get_json=True)
+    result = cs.getAlbum(album_id, ignore_cache, get_json=True, size=ALBUM_PAGE_THUMBNAIL_SIZE)
     return httpResponse(result)
 
 

@@ -29,9 +29,9 @@ export const WARNING_TOAST = "WARNING";
 export const ERROR_TOAST = "ERROR";
 
 function App() {
-    // let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
-    //     "library", libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}});
-    let [libraryData, playlistsDispatch] = useReducer(libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}})
+    let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
+        "library", libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}});
+    // let [libraryData, playlistsDispatch] = useReducer(libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}})
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
     let [navKey, setNavKey] = useState("library")

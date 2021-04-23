@@ -11,9 +11,9 @@ from urllib.parse import urlparse
 from cache import cache_service as cs
 from db import ytm_db_service as dbs
 from db.db_service import executeSQLFetchAll
-from db.ytm_db_service import updateDictEntry
+from db.ytm_db_service import updateDictEntry, getArtistId
 from log import logMessage
-from util import iterableToDbTuple
+from util import iterableToDbTuple, PLAYLIST_THUMBNAIL_SIZE, SONG_THUMBNAIL_SIZE, ARTIST_PAGE_THUMBNAIL_SIZE
 
 
 def createRandomCode():
@@ -133,12 +133,12 @@ class Playlist:
         plid, name, thumbnail_id, last_updated = db_tuple
         if last_updated:
             last_updated = datetime.fromtimestamp(last_updated)
-        thumbnail = cs.getThumbnail(thumbnail_id, size=96)
+        thumbnail = cs.getThumbnail(thumbnail_id, size=PLAYLIST_THUMBNAIL_SIZE)
         return cls(plid, name, thumbnail, [], last_updated)
 
     @classmethod
     def from_json(cls, playlist_json):
-        thumbnail = Thumbnail.from_json(playlist_json, size=96)
+        thumbnail = Thumbnail.from_json(playlist_json, size=PLAYLIST_THUMBNAIL_SIZE)
         pl_id = playlist_json.get("playlistId", playlist_json.get("id"))
         name = playlist_json.get("title")
         tracks = playlist_json.get("tracks", [])
@@ -167,8 +167,12 @@ class ReleaseType(Enum):
 
     @classmethod
     def from_ytm_value(cls, val):
-        if val == "abc":
+        if val == 'MUSIC_RELEASE_TYPE_ALBUM':
             return cls.ALBUM
+        elif val == 'MUSIC_RELEASE_TYPE_EP':
+            return cls.EP
+        else:
+            raise Exception("add this: " + val)
 
     @classmethod
     def from_str(cls, val):
@@ -177,7 +181,8 @@ class ReleaseType(Enum):
 
 class Album:
     def __init__(self, aid, name, thumbnail: Thumbnail, playlist_id=None, description=None, num_tracks=None,
-                 release_date_timestamp=None, duration=None, release_type=None, thumbnail_id=None, year=None, songs=None):
+                 release_date_timestamp=None, duration=None, release_type=None, thumbnail_id=None, year=None,
+                 songs=None):
         self.album_id = aid
         self.name = name
         self.thumbnail = thumbnail
@@ -188,6 +193,8 @@ class Album:
             if release_date_timestamp else None
         self.release_date_timestamp = release_date_timestamp
         self.duration = duration
+        if isinstance(release_type, str):
+            release_type = ReleaseType.from_str(release_type)
         self.release_type: ReleaseType = release_type
         self.thumbnail_id = thumbnail_id
         self.year = year
@@ -199,8 +206,8 @@ class Album:
     def to_db(self):
         thumb_id = self.thumbnail.thumbnail_id if self.thumbnail else self.thumbnail_id
         rel_type = self.release_type.value if self.release_type else None
-        return self.album_id, self.name, thumb_id, self.playlist_id, self.description, \
-               self.num_tracks, self.release_date, self.release_date_timestamp, self.duration, rel_type, self.year
+        return self.album_id, self.name, thumb_id, self.playlist_id, self.description, self.num_tracks, \
+               self.release_date, self.release_date_timestamp, self.duration, rel_type, self.year
 
     @classmethod
     def from_db(cls, db_tuple):
@@ -210,11 +217,11 @@ class Album:
                    thumbnail_id=thumbnail_id, release_type=release_type, year=year)
 
     @classmethod
-    def from_json(cls, album_id, album_json, release_type=None):
+    def from_json(cls, album_id, album_json, release_type=None, thumbnail_size=SONG_THUMBNAIL_SIZE):
         aid = album_json.get("id") or album_json.get("browseId")
         if not album_id:
             album_id = aid
-        thumbnail = Thumbnail.from_json(album_json, size=60)
+        thumbnail = Thumbnail.from_json(album_json, size=thumbnail_size)
         name = album_json.get("title")
         playlist_id = album_json.get("playlistId")
         description = album_json.get("description")
@@ -249,11 +256,10 @@ class Album:
     def to_json(self, index=None):
         the_json = {"id": self.album_id, "title": self.name, "playlist_id": self.playlist_id,
                     "description": self.description, "duration": self.duration,
-                    "release_type": self.release_type.value if self.release_type else "",
-                    "num_tracks": self.num_tracks, "release_date": self.release_date,
-                    "release_year": self.year,
-                    "thumbnail": self.thumbnail.to_json() if self.thumbnail else {}}
-        the_json["songs"] = [s.to_json() for s in self.songs] if self.songs else []
+                    "release_type": self.release_type.value if self.release_type else "", "num_tracks": self.num_tracks,
+                    "release_date": self.release_date, "release_year": self.year,
+                    "thumbnail": self.thumbnail.to_json() if self.thumbnail else {},
+                    "songs": [s.to_json() for s in self.songs] if self.songs else []}
         if index:
             the_json["index"] = index
         return the_json
@@ -295,7 +301,7 @@ class Artist:
         else:
             artist_id = artist_json.get("id")
             artist_name = artist_json.get("name")
-            thumbnail = Thumbnail.from_json(artist_json, 300)
+            thumbnail = Thumbnail.from_json(artist_json, ARTIST_PAGE_THUMBNAIL_SIZE)
             description = artist_json.get("description")
             views = artist_json.get("views")
             channel_id = artist_json.get("channelId")
@@ -410,7 +416,7 @@ def getListOfSongObjects(source_data, from_db, include_playlists, include_index=
             album_id_map[a.album_id] = a
 
     # get thumbnail data, then create album objects for each song
-    thumbnails: List[Thumbnail] = cs.getListOfThumbnails(thumbnail_ids, size=60)
+    thumbnails: List[Thumbnail] = cs.getListOfThumbnails(thumbnail_ids, size=SONG_THUMBNAIL_SIZE)
     for next_thumb in thumbnails:
         songs_with_thumb: List[Song] = thumbnail_id_to_song[next_thumb.thumbnail_id]
         for s in songs_with_thumb:
@@ -477,23 +483,38 @@ class Song:
                    album_name=album_name, is_available=is_available)
 
     @classmethod
-    def from_json(cls, song_json: dict, index=None):
+    def from_json(cls, song_json: dict, index=None, album_artists=None):
+        if not album_artists:
+            album_artists = {}
         vid_id = song_json.get("videoId")
         set_vid_id = song_json.get("setVideoId")
         title = song_json.get("title")
         try:
-            artists = [Artist.from_json(a) for a in song_json.get("artists", [])]
+            artist = song_json.get("artists", [])
+            if isinstance(artist, str):
+                artist = album_artists.get(artist)
+                if not artist:
+                    artist_id = getArtistId(artist)
+                    artist = cs.getArtist(artist_id)
+                artist = [artist]
+            else:
+                artist = [Artist.from_json(a) for a in artist]
         except TypeError as e:
-            artists = []
+            artist = []
         length = song_json.get("duration")
+        length_ms = int(song_json.get("lengthMs"))
+        if length_ms:
+            length_ms = length_ms / 1000
+            minutes, seconds = divmod(length_ms, 60)
+            length = f"{minutes:.0f}:{seconds:.0f}"
         explicit = song_json.get("isExplicit", False)
         is_available = song_json.get("isAvailable", False)
         is_local = song_json.get("is_local", False)
-        thumbnail_id = getThumbnailId(song_json, size=60)
+        thumbnail_id = getThumbnailId(song_json, size=SONG_THUMBNAIL_SIZE)
         album_json = song_json.get("album", {}) or {}
         album_id = album_json.get("id")
         album_name = album_json.get("name")
-        return cls(vid_id=vid_id, title=title, artists=artists, length=length, explicit=explicit,
+        return cls(vid_id=vid_id, title=title, artists=artist, length=length, explicit=explicit,
                    local=is_local, set_vid_id=set_vid_id, album_id=album_id, album_name=album_name,
                    thumbnail_id=thumbnail_id, is_available=is_available, index=index)
 

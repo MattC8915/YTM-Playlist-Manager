@@ -1,0 +1,36 @@
+accept: */*
+accept-encoding: gzip, deflate, br
+accept-language: en-US,en;q=0.9
+authorization: SAPISIDHASH 1619010265_7b913acc4a852d609e5ce39922321247f7657a41
+content-length: 764
+content-type: application/json
+cookie: VISITOR_INFO1_LIVE=w-K0PSZZQpk; CONSENT=WP.28eeba; _gcl_au=1.1.171095071.1611457485; LOGIN_INFO=AFmmF2swRgIhAJTOk3i0MjPquYE4YtaacEDN2wzfk1zO053eR8GhHAelAiEApiyO_sSkXfUMHx55tqItD7lRvxDGeDd2Cx2GtSwSctU:QUQ3MjNmeDlhNl90Zl9pVkhaYkJfZ3o0aVZQcmZ2T1lZS1VkRHAtWkNKRmpnR1dZcUlFdnc4UnFHS3lfajVIMURDRkhteXdXdjBoQWZMVkFlRXAtZjcxa2RSWFF3VGVERHRwSzd1bjBTaERja2FoSVhaWlMwS3V3dGFXTDRvWld5UTdNVXlTS3MxRjhWbllwLTgyUEZ2YWRSWTN3ZUo4MGVlRTcwZlNmdE9LVXFYcEpyZGJxNHJjekxRQTBqY3IxNHhtZDVWWHR3M09O; YSC=7pcSmHnUIgM; wide=1; SID=8gcVR8gkDR3LvO99cv9RwTAb6gZV8UklOE2jtvnLlb2Wog7etEOUwUzdrfaSKkcRg3eqrg.; __Secure-3PSID=8gcVR8gkDR3LvO99cv9RwTAb6gZV8UklOE2jtvnLlb2Wog7eSF6Q-sKeZQ6Hma3zhi8MTw.; HSID=AQj-XclyX0gGpIRAL; SSID=AOKNKa-_-WT4XnaRq; APISID=Ror7xez8riFUhuwm/AbKwmpphSXIwKbf_f; SAPISID=rgGQqS6domYKdL9z/AynjlmyCQshjb6bsR; __Secure-3PAPISID=rgGQqS6domYKdL9z/AynjlmyCQshjb6bsR; PREF=volume=100&f6=40000000&tz=America.New_York&library_tab_browse_id=FEmusic_liked_playlists&f5=30000&f4=4000000; SIDCC=AJi4QfELhtZ5DfRp8rI1FxdM3iJH7OC9SFIXV5cvg61tV8XJL5vgGSO57WDyudW6LLbTL4w7Fg; __Secure-3PSIDCC=AJi4QfFP7v0BT1InpPw6GXVINAq1Ptk9Tv5paMFGScc3viCvO4ZQTvyb7IAV1vjnErHQzTjePcs
+origin: https://music.youtube.com
+referer: https://music.youtube.com/
+sec-ch-ua: "Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"
+sec-ch-ua-mobile: ?0
+sec-fetch-dest: empty
+sec-fetch-mode: cors
+sec-fetch-site: same-origin
+user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.128 Safari/537.36
+x-client-data: CIm2yQEIpbbJAQjEtskBCKmdygEIlqzKAQiGucoBCPjHygEIxf7KAQiymssBCOOcywEIqZ3LAQjpncsBGOCaywE=
+Decoded:
+message ClientVariations {
+  // Active client experiment variation IDs.
+  repeated int32 variation_id = [3300105, 3300133, 3300164, 3313321, 3315222, 3316870, 3318776, 3325765, 3329330, 3329635, 3329705, 3329769];
+  // Active client experiment variation IDs that trigger server-side behavior.
+  repeated int32 trigger_variation_id = [3329376];
+}
+x-goog-authuser: 0
+x-goog-pageid: undefined
+x-goog-visitor-id: Cgt3LUswUFNaWlFwayi5xYCEBg%3D%3D
+x-origin: https://music.youtube.com
+x-youtube-ad-signals: dt=1619010234677&flash=0&frm&u_tz=-240&u_his=2&u_java&u_h=1080&u_w=1920&u_ah=1055&u_aw=1920&u_cd=24&u_nplug=3&u_nmime=4&bc=31&bih=944&biw=1141&brdim=-1920%2C-331%2C-1920%2C-331%2C1920%2C-331%2C1920%2C1055%2C1153%2C944&vis=1&wgl=true&ca_type=image&bid=ANyPxKpx6oR2RBR-bsVn9szKihEgDctPZYfV3yCkaNCaN_fP6MG6CnBQruyXtF1a6f6-MeTc2pR5R5N5XBRfflPmz2EVE6ZEqg
+x-youtube-client-name: 67
+x-youtube-client-version: 0.1
+x-youtube-device: cbr=Chrome&cbrand=apple&cbrver=89.0.4389.128&ceng=WebKit&cengver=537.36&cos=Macintosh&cosver=11_2_3&cplatform=DESKTOP&cyear=2013
+x-youtube-identity-token: QUFFLUhqbjkzQ0lTLU55T2lsclB3YzQ5ZWNLNGxUNEZLd3w=
+x-youtube-page-cl: 368423699
+x-youtube-page-label: youtube.music.web.client_20210414_00_RC00
+x-youtube-time-zone: America/New_York
+x-youtube-utc-offset: -240

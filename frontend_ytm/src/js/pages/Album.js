@@ -74,10 +74,8 @@ export default function Album(props) {
         useSongPage(true, false, false, true, false);
 
     const fetchAlbumData = useCallback((forceRefresh) => {
-        console.log("Getting album " + albumId)
         sendRequest(`/album/${albumId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`)
             .then((resp) => {
-                console.log(resp);
                 libraryContext.setAlbum(resp)
             })
             .catch((resp) => {
@@ -112,7 +110,7 @@ export default function Album(props) {
             {albumData && (
                 <div>
                     <div style={{float:"left", paddingRight: "1em"}}>
-                        <Thumbnail data={albumData} size={300}/>
+                        <Thumbnail data={albumData} size={200}/>
                     </div>
                     <p>{albumData.description}</p>
                 </div>
