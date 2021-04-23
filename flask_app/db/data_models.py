@@ -502,8 +502,9 @@ class Song:
         except TypeError as e:
             artist = []
         length = song_json.get("duration")
-        length_ms = int(song_json.get("lengthMs"))
+        length_ms = song_json.get("lengthMs")
         if length_ms:
+            length_ms = int(length_ms)
             length_ms = length_ms / 1000
             minutes, seconds = divmod(length_ms, 60)
             length = f"{minutes:.0f}:{seconds:.0f}"
