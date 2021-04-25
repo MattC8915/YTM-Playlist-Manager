@@ -14,7 +14,7 @@ from db.db_service import executeSQL, executeSQLFetchAll
 
 # to turn a base64 string back into a url: binascii.unhexlify
 from log import logMessage, setupCustomLogger, logException
-from api.ApiFactory import getYoutubeApi
+# from api.ApiFactory import getYoutubeApi
 
 
 def downloadImages():
