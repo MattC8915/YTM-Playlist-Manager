@@ -17,7 +17,6 @@ export default function PlaylistList(props) {
     // define the columns for the list of playlists
     const columns = [
         {
-            title: "Thumbnail",
             dataIndex: "thumbnail",
             key: "thumbnail",
             render: (text, record) => {

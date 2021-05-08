@@ -6,7 +6,6 @@ export default class ErrorBoundary extends React.Component {
         console.log("did catch", error, errorInfo)
         throw(error)
     }
-
     render() {
         return this.props.children;
     }

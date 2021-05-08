@@ -464,7 +464,7 @@ class Song:
         artist_json = [a.to_json() for a in self.artists]
         playlist_json = [sip.to_json() for sip in self.playlists]
         return {"videoId": self.video_id, "setVideoId": self.set_video_id, "title": self.title, "index": self.index,
-                "album": album_json, "isAvailable": self.is_available, "artists": artist_json, "is_dupe": self.is_dupe,
+                "album": album_json, "isAvailable": self.is_available, "artists": artist_json, "isDupe": self.is_dupe,
                 "playlists": playlist_json, "duration": self.duration, "isExplicit": self.explicit,
                 "is_local": self.local}
 

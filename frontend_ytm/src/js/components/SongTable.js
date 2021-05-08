@@ -14,6 +14,7 @@ export default function SongTable() {
     let songTableContext = useContext(SongPageContext);
     let pageData = songTableContext.data;
 
+    let [shuffleSongsOnAdd, setShuffleSongsOnAdd] = useState(false)
     // noinspection JSCheckFunctionSignatures
     let toastContext = useContext(MyToastContext);
     // noinspection JSCheckFunctionSignatures
@@ -241,20 +242,22 @@ export default function SongTable() {
             method: "PUT",
             body: {
                 songs: selectedSongs,
-                playlist: selectedPlaylist.playlistId
+                playlist: selectedPlaylist.playlistId,
+                shuffle: shuffleSongsOnAdd
             }
         }
         setShowAddToPlaylistPopup(false)
         sendRequest("/addSongs", options)
             .then((resp) => {
-                playlistContext.addSongs(selectedPlaylist.playlistId, resp.success)
+                setShuffleSongsOnAdd(false)
+                libraryContext.addSongs(selectedPlaylist.playlistId, resp.success)
                 displayAddToPlaylistResponseToast(resp)
             })
             .catch((resp) => {
                 console.log("Error adding songs to playlist");
                 console.log(resp);
                 if (resp && resp.success) {
-                    playlistContext.addSongs(selectedPlaylist.playlistId, resp.success)
+                    libraryContext.addSongs(selectedPlaylist.playlistId, resp.success)
                     displayAddToPlaylistResponseToast(resp)
                 } else {
                     toastContext.addToast("Unknown error", ERROR_TOAST)
@@ -268,6 +271,11 @@ export default function SongTable() {
     // noinspection JSUnresolvedFunction
     const popoverContent = (
         <div>
+            <Checkbox
+                checked={shuffleSongsOnAdd}
+                onChange={() => setShuffleSongsOnAdd(!shuffleSongsOnAdd)}>
+                Shuffle
+            </Checkbox>
             <Button type={"primary"}
                     onClick={() => addSelectedSongsToPlaylists()}>
                 Add

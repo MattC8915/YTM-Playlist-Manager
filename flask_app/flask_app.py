@@ -1,4 +1,5 @@
 """Flask endpoints"""
+import random
 import time
 
 import json
@@ -64,7 +65,11 @@ def addSongsToPlaylistEndpoint():
     """
     request_body = request.json
     playlist_id = request_body["playlist"]
+    shuffle_songs = request_body.get("shuffle", False)
     songs = request_body["songs"]
+    if shuffle_songs:
+        print("Shuffling songs")
+        random.shuffle(songs)
     logMessage(f"Addings songs [{songs}] to playlist [{playlist_id}]")
     success_ids, already_there_ids, failure_ids = ytm_service.addSongsToPlaylist(playlist_id, songs)
     logMessage(f"Success: {success_ids}\nAlready there: {already_there_ids}\nFailure: {failure_ids}")
