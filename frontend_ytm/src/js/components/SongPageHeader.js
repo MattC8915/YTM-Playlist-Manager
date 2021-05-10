@@ -20,7 +20,7 @@ export default function SongPageHeader() {
                     </Button>
                     {" "}
                     {pageData.showDuplicateCount && pageData.numDuplicates > 0 && (
-                        <Button onClick={() => pageData.setFilteringByDupes(!pageData.filteringByDupes)}>
+                        <Button onClick={() => pageData.setFilterDupes(!pageData.filterByDupes)}>
                             <Badge count={`Dupes found (${pageData.numDuplicates})`}/>
                         </Button>
                     )}
