@@ -1,3 +1,5 @@
+import {log} from "../Utilities";
+
 const {useRef} = require("react");
 const {useEffect} = require("react");
 const usePrevious = (value, initialValue) => {
@@ -26,7 +28,7 @@ export const useEffectDebugger = (effectHook, dependencies, dependencyNames = []
     }, {});
 
     if (Object.keys(changedDeps).length) {
-        console.log('[use-effect-debugger] ', changedDeps);
+        log('[use-effect-debugger] ', changedDeps);
     }
 
     useEffect(effectHook, dependencies);

@@ -1,4 +1,4 @@
-import {Button, Input, Popover, Table} from "antd";
+import {Button, Checkbox, Input, Popover, Table} from "antd";
 import React, {useCallback, useContext, useMemo, useState} from "react";
 import {Link} from "@reach/router";
 import debounce from "lodash/debounce";
@@ -7,19 +7,18 @@ import {ReleaseType, SongPageContext} from "../util/context/SongPageContext";
 import {MyToastContext} from "../util/context/MyToastContext";
 import {useHttp} from "../util/hooks/UseHttp";
 import {cloneDeep, groupSongsByAlbum, LibraryContext} from "../util/context/LibraryContext";
-import {MinusSquareOutlined} from "@ant-design/icons";
+import {log} from "../util/Utilities";
 
 export default function SongTable() {
     // noinspection JSCheckFunctionSignatures
     let songTableContext = useContext(SongPageContext);
     let pageData = songTableContext.data;
-
     let [shuffleSongsOnAdd, setShuffleSongsOnAdd] = useState(false)
     // noinspection JSCheckFunctionSignatures
     let toastContext = useContext(MyToastContext);
     // noinspection JSCheckFunctionSignatures
-    let playlistContext = useContext(LibraryContext);
-    let myLibrary = playlistContext.library;
+    let libraryContext = useContext(LibraryContext);
+    let myLibrary = libraryContext.library;
     let [sortFunctionColumnKey, setSortFunctionColumnKey] = useState(null);
     let sendRequest = useHttp();
     let [searchFilter, setSearchFilter] = useState("")
@@ -28,30 +27,7 @@ export default function SongTable() {
     let [selectedPlaylist, setSelectedPlaylist] = useState([]);
 
     /**
-     * Removes the given songs from the given playlist
-     * Each songObject must have a videoId and setVideoId property
-     */
-    const removeSongsFromPlaylist = useCallback((playlistId, songObjects) => {
-        songObjects = songObjects.map((song) => {
-            return {"videoId": song.videoId, "setVideoId": song.setVideoId}
-        })
-        let options = {
-            method: "DELETE",
-            body: {
-                playlist: playlistId,
-                songs: songObjects
-            }
-        }
-        return sendRequest("/removeSongs", options)
-            .then((resp) => {
-                playlistContext.removeSongs(playlistId, songObjects)
-                toastContext.addToast("Successfully removed songs", SUCCESS_TOAST)
-                return resp;
-            })
-    }, [playlistContext, sendRequest, toastContext])
-
-    /**
-     * Filter songs. And optionally group them by
+     * Filter songs based on the user's search. And optionally group them by albums
      */
     const filterSongs = useCallback((songLists) => {
         songLists.forEach((songList) => {
@@ -73,68 +49,30 @@ export default function SongTable() {
                 });
                 songList.songs = Array.from(filteredSet)
             }
-
-            // group songs by their album
-            if (pageData.albumView) {
-                songList.songs = groupSongsByAlbum(songList.songs)
-                // hide all singles
-                if (pageData.hideSingles) {
-                    songList.songs = songList.songs.filter((album) => album.children.length > 1)
-                }
-                // hide all albums
-                if (pageData.hideAlbums) {
-                    songList.songs = songList.songs.filter((album) => album.children.length === 1)
-                }
-            }
         })
-    }, [searchFilter, pageData.albumView, pageData.hideSingles, pageData.hideAlbums])
+    }, [searchFilter])
 
     /**
      * Set playlist-dependent properties like index, setVideoId and isDupe.
      * And create the render object for every other playlist it belongs to
      */
     let songLists = useMemo(() => {
+        log("use memo songtable songlists")
         let songLists = cloneDeep(pageData.songLists)
         songLists.forEach((songListObj) => {
-            songListObj.songs = songListObj.songs.map((playlistSong, index) => {
-                let canonSong;
-                if (ReleaseType.isAlbum(songListObj.releaseType)) {
-                    canonSong = cloneDeep(myLibrary.albums[playlistSong.id])
-                } else {
-                    canonSong = cloneDeep(myLibrary.songs[playlistSong.videoId])
-                }
-                canonSong.index = playlistSong.index !== undefined ? playlistSong.index : index
-                songListObj.prepFunction(canonSong, playlistSong)
 
-                if (!canonSong.playlists) {
-                    canonSong.playlists = []
-                }
-                canonSong.renderOtherPlaylists = canonSong.playlists
-                    .filter((pl) => pl.playlistId !== pageData.playlistId)
-                    .map((song_in_playlist, index) => {
-                        return (
-                            <div key={index}>
-                                {/*Provide a button for every playlist (besides this one) that allows the user to remove this song from that playlist*/}
-                                <MinusSquareOutlined onClick={() => {
-                                    // noinspection JSIgnoredPromiseFromCall
-                                    removeSongsFromPlaylist(song_in_playlist.playlistId, [song_in_playlist])
-                                }}/>
-                                {" "} <Link to={`/songs/${song_in_playlist.playlistId}`}>{song_in_playlist.playlistName}</Link>
-                            </div>
-                        )
-                    });
-                return canonSong;
-            })
+            // set the sort function based on the column that was clicked
             if (sortFunctionColumnKey) {
-                let sortFunct = (a, b) => a[sortFunctionColumnKey] - b[sortFunctionColumnKey]
-                songListObj.songs = songListObj.songs.sort(sortFunct);
+                let sortFunction = (a, b) => a[sortFunctionColumnKey] - b[sortFunctionColumnKey]
+                songListObj.songs = songListObj.songs.sort(sortFunction);
             }
         })
         if (searchFilter || pageData.albumView) {
             filterSongs(songLists)
         }
+        log("DONE use memo songtable songlists")
         return songLists;
-    }, [pageData.songLists, pageData.playlistId, filterSongs, sortFunctionColumnKey, myLibrary.albums, myLibrary.songs, removeSongsFromPlaylist])
+    }, [pageData.songLists, pageData.albumView, searchFilter, sortFunctionColumnKey, filterSongs])
 
     /**
      * Returns the song objects that are currently selected
@@ -154,8 +92,8 @@ export default function SongTable() {
                 songs =  songList.songs.filter((song) => pageData.selectedRowIds.includes(song.setVideoId))
             }
             if (pageData.albumView && includeAlbums) {
-                console.log("filtered", songList.songs)
-                let albums = songList.songs.filter((album) => pageData.selectedRowIds.includes(album.id))
+                log("filtered", songList.songs)
+                let albums = songList.albums.filter((album) => pageData.selectedRowIds.includes(album.id))
                 songs.push(...albums)
             }
             return songs
@@ -164,9 +102,10 @@ export default function SongTable() {
         let finalSongList = []
         listOfLists.forEach((nextList) => {
             nextList.forEach((nextSong) => {
-                if (!songIdSet.has(nextSong.videoId)) {
+                let itemId = nextSong.videoId === undefined ? nextSong.id : nextSong.videoId;
+                if (!songIdSet.has(itemId)) {
                     finalSongList.push(nextSong)
-                    songIdSet.add(nextSong.videoId);
+                    songIdSet.add(itemId);
                 }
             })
         })
@@ -254,15 +193,14 @@ export default function SongTable() {
                 displayAddToPlaylistResponseToast(resp)
             })
             .catch((resp) => {
-                console.log("Error adding songs to playlist");
-                console.log(resp);
+                log("Error adding songs to playlist");
+                log(resp);
                 if (resp && resp.success) {
                     libraryContext.addSongs(selectedPlaylist.playlistId, resp.success)
                     displayAddToPlaylistResponseToast(resp)
                 } else {
                     toastContext.addToast("Unknown error", ERROR_TOAST)
                 }
-
             })
     }
 
@@ -288,7 +226,7 @@ export default function SongTable() {
                 columns={[{title: "Playlist name", dataIndex: "title"}]}
                 showHeader={false}
                 dataSource={myLibrary.playlists.filter((pl) => pl.playlistId !== "LM"
-                    && pl.playlistId !== pageData.playlistId)}
+                    && pl.playlistId !== pageData.playlistId && pl.playlistId !== "history")}
                 rowKey={"playlistId"}
                 size={"small"}
                 scroll={{y: 300, x: 200}}
@@ -308,14 +246,14 @@ export default function SongTable() {
      */
     function removeSelectedRows() {
         let selectedSongs = getSelectedSongs(false, false)
-        removeSongsFromPlaylist(pageData.playlistId, selectedSongs)
+        pageData.removeSongsFromPlaylist(pageData.playlistId, selectedSongs)
             .then(() => {
                 // de-select all rows
                 pageData.setSelectedRowIds([])
             })
             .catch((resp) => {
-                console.log("Error removing songs:")
-                console.log(resp)
+                log("Error removing songs:")
+                log(resp)
                 toastContext.addToast("Error removing songs", ERROR_TOAST)
                 songTableContext.fetchData(true).then((fetchedSongs) => {
                     // if the user had selected songs before refreshing: select those songs again
@@ -407,7 +345,8 @@ export default function SongTable() {
                     sticky={songList.stickyConfig}
                     columns={songList.tableColumns}
                     loading={pageData.isDataLoading}
-                    dataSource={songList.songs}
+                    dataSource={pageData.albumView ? songList.albums : songList.songs}
+                    rowKey={"id"}
                     onChange={tableSortChange}
                     pagination={{
                         position: songList.paginationPosition,
@@ -415,7 +354,6 @@ export default function SongTable() {
                         pageSizeOptions: [100, 1000, 10000],
                         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
                     }
-                    rowKey={"id"}
                     size={"small"}
                     rowSelection={{
                         selectedRowKeys: pageData.selectedRowIds,
@@ -425,31 +363,31 @@ export default function SongTable() {
                             // if I just selected an album - select all its songs
                             let newAlbums = newSelectedRows.filter((row) => !row.setVideoId && !pageData.selectedRowIds.includes(row.id))
                             if (newAlbums && newAlbums.length > 0) {
-                                console.log("new albums")
-                                console.log(newAlbums)
+                                log("new albums")
+                                log(newAlbums)
                                 let newChildrenIds = []
                                 newAlbums.forEach((album) => {
                                     let songIds = album.children.map((song) => song.id)
                                     newChildrenIds.push(...songIds)
                                 })
-                                console.log(newChildrenIds, "will be added to", newSelectedRowIds)
+                                log(newChildrenIds, "will be added to", newSelectedRowIds)
                                 newChildrenIds = newChildrenIds.filter((childId) => !newSelectedRowIds.includes(childId))
                                 newSelectedRowIds.push(...newChildrenIds)
-                                console.log(newSelectedRowIds)
+                                log(newSelectedRowIds)
                             }
                             // if I just deselected an album - deselect all its songs
                             let removedAlbums = getSelectedSongs(true, false)
                                 .filter((row) => !row.setVideoId && !newSelectedRowIds.includes(row.id))
                             if (removedAlbums && removedAlbums.length > 0) {
-                                console.log("removed albums")
+                                log("removed albums")
                                 let removedChildren = []
                                 removedAlbums.forEach((album) => {
                                     let songIds = album.children.map((song) => song.id)
                                     removedChildren.push(...songIds)
                                 })
-                                console.log(removedChildren, "will be removed from", newSelectedRowIds)
+                                log(removedChildren, "will be removed from", newSelectedRowIds)
                                 newSelectedRowIds = newSelectedRowIds.filter((row) => !removedChildren.includes(row))
-                                console.log(newSelectedRowIds)
+                                log(newSelectedRowIds)
                             }
 
                             pageData.setSelectedRowIds(newSelectedRowIds)

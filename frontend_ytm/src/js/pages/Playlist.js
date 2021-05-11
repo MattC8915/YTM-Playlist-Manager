@@ -16,6 +16,8 @@ import SongPageHeader from "../components/SongPageHeader";
 import Thumbnail from "../components/Thumbnail";
 import {Button, Popover} from "antd";
 import {Link} from "@reach/router";
+import {useEffectDebugger} from "../util/hooks/UseEffectDebug";
+import {log} from "../util/Utilities";
 
 
 export function songsExist(playlist) {
@@ -125,18 +127,18 @@ const columns = [
 
 /**
  * Set necessary fields on the song object so the SongTable renders and functions correctly
- * @param canonSong the canon song object from the LibraryContext
- * @param playlistSong contains playlist-specific fields like setVideoId, isDupe, and playlist index
+ * @param allSongData the canon song object from the LibraryContext
+ * @param songInPlaylistObj contains playlist-specific fields like setVideoId, isDupe, and playlist index
  */
-function preparePlaylistSongForTable(canonSong, playlistSong) {
-    canonSong.setVideoId = playlistSong.setVideoId
-    canonSong.id = playlistSong.setVideoId
-    playlistSong.id = playlistSong.setVideoId
-    canonSong.isDupe = playlistSong.isDupe
-    if (!canonSong.setVideoId) {
+function preparePlaylistSongForTable(allSongData, songInPlaylistObj) {
+    allSongData.setVideoId = songInPlaylistObj.setVideoId
+    allSongData.id = songInPlaylistObj.setVideoId
+    songInPlaylistObj.id = songInPlaylistObj.setVideoId
+    allSongData.isDupe = songInPlaylistObj.isDupe
+    if (!allSongData.setVideoId) {
         // this is necessary because songs in history don't have a setVideoId
         // (We don't need to worry about duplicate videoIds bc YTM should make sure a song doesn't appear in history twice)
-        playlistSong.setVideoId = playlistSong.videoId;
+        songInPlaylistObj.setVideoId = songInPlaylistObj.videoId;
     }
 }
 
@@ -145,15 +147,15 @@ export default function Playlist(props) {
     let toastContext = useContext(MyToastContext);
     let sendRequest = useHttp();
     let [alreadyFetchedSongs, setAlreadyFetchedSongs] = useState(false);
-    let [filteringByDupes, setFilteringByDupes] = useState(false);
     let playlistId = props.playlistId
     let songList = new SongList("playlist", [], false, 1, ReleaseType.SONG,
         preparePlaylistSongForTable, columns, ["topRight", "bottomRight"], {offsetHeader: 50+66+24});
-    let songPageData =
-        useSongPage(true, !props.hideRemoveButton, true, true, !props.hideDupeCount)
+    let songPageData = useSongPage(true, !props.hideRemoveButton, true,
+        true, !props.hideDupeCount, playlistId)
 
     let library = libraryContext.library;
     let playlist = useMemo(() => {
+        log("usememo Playlist: " + playlistId)
         return library.playlists.find((pl) => pl.playlistId === playlistId)  || {"songs": []}
     }, [library.playlists, playlistId])
 
@@ -163,51 +165,58 @@ export default function Playlist(props) {
      */
     const fetchSongs = useCallback((forceRefresh) => {
         // save the ids of the selected rows, so they can be selected again after retrieving data
+        log("Fetching playlist songs")
         songPageData.setIsDataLoading(true);
         return sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
                 songPageData.setIsDataLoading(false);
                 let songs = resp.tracks
                 libraryContext.setSongs(playlistId, songs, forceRefresh)
+                log("DONE Fetching playlist songs")
                 return songs;
             })
             .catch((resp) => {
                 songPageData.setIsDataLoading(false);
-                console.log("ERROR")
-                console.log(resp)
+                log("ERROR")
+                log(resp)
                 toastContext.addToast("Error loading data", ERROR_TOAST)
                 return []
             })
     }, [libraryContext, playlistId, sendRequest, songPageData, toastContext])
 
     useEffect(() => {
-        // filter out duplicates if necessary
-        let songs = playlist.songs
-        // only display duplicate songs (if requested)
-        let dupes = songs.filter((song) => song.isDupe)
-        if (filteringByDupes) {
-            if (dupes.length === 0) {
-                setFilteringByDupes(false);
-                return songs;
-            }
-            return dupes;
-        }
-        songList.songs = songs
-        songPageData.setSongData(songList)
-        songPageData.setNumDuplicates(dupes.length)
-    }, [filteringByDupes, playlist.songs]) // ignored songList, songPageData
-
-    useEffect(() => {
         // fetch song data from backend if not done already
         if (playlistId && !playlist.fetchedAllSongs && !alreadyFetchedSongs) {
+            log("fetching songs")
             // noinspection JSIgnoredPromiseFromCall
             fetchSongs();
             setAlreadyFetchedSongs(true);
         }
         if (playlistId !== songPageData.playlistId) {
+            log("setting playlist id " + playlistId)
             songPageData.setPlaylistId(playlistId)
         }
-    }, [alreadyFetchedSongs, fetchSongs, playlist, playlistId, songPageData.playlistId]) // ignored songPageData
+    }, [fetchSongs, playlistId]) // ignored songPageData, alreadyFetchedSongs, playlist.fetchedAllSongs
+
+    useEffect(() => {
+        log("useeffect find dupes")
+        let dupes = playlist.songs.filter((song) => song.isDupe)
+        // only display duplicate songs (if requested)
+        if (songPageData.filterByDupes) {
+            if (dupes.length === 0) {
+                songPageData.setFilterDupes(false);
+                songList.songs = playlist.songs;
+            }
+            songList.songs = dupes;
+        } else {
+            songList.songs = playlist.songs;
+        }
+
+        log("halfway done useeffect find dupes")
+        songPageData.setSongData(songList)
+        songPageData.setNumDuplicates(dupes.length)
+        log("DONE useeffect find dupes")
+    }, [songPageData.filterByDupes, playlist.songs]) // ignored songList, songPageData
 
     useEffect(() => {
         let headerTitle = (

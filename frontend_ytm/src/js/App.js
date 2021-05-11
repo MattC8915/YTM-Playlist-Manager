@@ -22,6 +22,7 @@ import Playlist from "./pages/Playlist";
 import Button from "antd/lib/button/button";
 import Artist from "./pages/Artist";
 import Album from "./pages/Album";
+import {log} from "./util/Utilities";
 
 export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
@@ -110,14 +111,14 @@ function App() {
      * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
      */
     const loadPlaylists = useCallback((forceRefresh) => {
-        // console.log("load playlists")
+        // log("load playlists")
         return sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
                 setPlaylists(resp);
                 return resp;
             })
             .catch((error) => {
-                console.log(error);
+                log(error);
                 addToast("Error loading library", ERROR_TOAST)
                 return error;
             })
@@ -125,6 +126,7 @@ function App() {
 
 
     useEffect(() => {
+        log("useeffect app.js")
         // load the list of playlists from the backend if not done already
         if (!loadedPlaylists) {
             loadPlaylists()
@@ -133,6 +135,8 @@ function App() {
         if (window.location.pathname.includes("/history") && navKey !== "history") {
             setNavKey("history")
         }
+        log("DONE useeffect app.js")
+
     }, [loadPlaylists, loadedPlaylists, navKey, setLoadedPlaylists])
 
     function handleMenuClick(e) {

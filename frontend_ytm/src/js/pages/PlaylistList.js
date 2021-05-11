@@ -6,11 +6,13 @@ import {useNavigate} from "@reach/router";
 import {Button, PageHeader, Table} from "antd";
 import {SyncOutlined} from "@ant-design/icons"
 import Thumbnail from "../components/Thumbnail";
+import {log} from "../util/Utilities";
 
 export default function PlaylistList(props) {
     let nav = useNavigate();
     let [isLoading, setIsLoading] = useState(false);
     let playlists = useMemo(() => {
+        log("use memo playlistlist")
         return props.playlists.filter((pl) => pl.playlistId !== "LM" && pl.playlistId !== "history")
     }, [props.playlists])
 

@@ -71,7 +71,8 @@ export default function Album(props) {
     }, [libraryContext.library.albums, albumId])
 
     let songPageData =
-        useSongPage(true, false, false, true, false);
+        useSongPage(true, false, false, true,
+            false, null);
 
     const fetchAlbumData = useCallback((forceRefresh) => {
         sendRequest(`/album/${albumId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`)

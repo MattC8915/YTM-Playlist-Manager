@@ -10,6 +10,7 @@ import Thumbnail from "../components/Thumbnail";
 import {Button, Popover} from "antd";
 import {Link} from "@reach/router";
 import {renderArtistLinkToLocal, renderIndexWithMetadata} from "./Playlist";
+import {log} from "../util/Utilities";
 
 const columns = [
     {
@@ -78,13 +79,14 @@ export default function Artist(props) {
     }, [libraryContext.library.artists, artistId])
 
     let songPageData =
-        useSongPage(true, false, false, true, false);
+        useSongPage(true, false, false, true,
+            false, null);
 
     const fetchArtistData = useCallback((forceRefresh) => {
-        console.log("Getting artist " + artistId)
+        log("Getting artist " + artistId)
         sendRequest(`/artist/${artistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`)
             .then((resp) => {
-                console.log(resp);
+                log(resp);
                 libraryContext.setArtist(resp)
             })
             .catch((resp) => {

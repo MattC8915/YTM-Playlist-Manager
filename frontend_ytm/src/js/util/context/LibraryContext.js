@@ -1,5 +1,6 @@
 import {createContext} from "react";
 import {songsExist} from "../../pages/Playlist";
+import {log} from "../Utilities";
 
 /**
  * Context object for playlist state management
@@ -16,76 +17,6 @@ export const REMOVE_SONGS = "REMOVE_SONGS"
 export const SET_ARTIST = "SET_ARTIST"
 export const SET_ALBUM = "SET_ALBUM"
 
-
-function getArtistString(songs) {
-    let artistCount = {}
-    songs.forEach((song) => {
-        increaseArtistCount(song.artists, artistCount)
-    })
-    // sort artists by # of appearances
-    let artistsString = Object.entries(artistCount)
-        .sort(([a1, count1], [a2, count2]) => count1 > count2 ? -1 : 1)
-        .map(([artist, count]) => artist)
-        .join(", ");
-    if (artistsString.length > 100) {
-        artistsString = artistsString.substring(0, 100) + "..."
-    }
-    return artistsString
-}
-
-export function groupSongsByAlbum(songs) {
-    let uniqueAlbumIds = [];
-    let uniqueAlbums = [];
-    let uniqueArtistNames = [];
-    songs.forEach((song) => {
-        let albumId = song.album.id;
-        if (albumId) {
-            if (!uniqueAlbumIds.includes(albumId)) {
-                uniqueAlbums.push(song.album)
-                uniqueAlbumIds.push(albumId)
-            }
-        } else {
-            let artistString = getArtistString([song])
-            song.artistString = artistString;
-            if (!uniqueArtistNames.includes(artistString)) {
-                uniqueArtistNames.push(artistString);
-            }
-        }
-    })
-
-    let albums = uniqueAlbums.map((nextAlbum) => {
-        let album = cloneDeep(nextAlbum);
-        let songsInAlbum = songs.filter((song) => song.album.id === album.id)
-        // count how many times an artist appears in the album
-        album.artistsString = getArtistString(songsInAlbum)
-        album.albumString = album.title;
-        album.children = songsInAlbum;
-        album.thumbnail = songsInAlbum[0].thumbnail;
-        album.duration = songsInAlbum.length;
-        return album;
-    });
-    let artists = uniqueArtistNames.map((nextArtist) => {
-        let songsForArtist = songs.filter((song) => song.artistString === nextArtist)
-        let album = {};
-        album.id = nextArtist;
-        album.artistsString = nextArtist;
-        album.children = songsForArtist;
-        album.thumbnail = songsForArtist[0].thumbnail;
-        album.duration = songsForArtist.length;
-        return album;
-    })
-    albums.push(...artists);
-    albums.sort((a1, a2) => {
-        let lowestA1 = a1.children.reduce((lowestIndex, nextSong) => {
-            return nextSong.index < lowestIndex ? nextSong.index : lowestIndex;
-        }, 10000)
-        let lowestA2 = a2.children.reduce((lowestIndex, nextSong) => {
-            return nextSong.index < lowestIndex ? nextSong.index : lowestIndex;
-        }, 10000)
-        return lowestA1 < lowestA2 ? -1 : 1;
-    })
-    return albums;
-}
 
 function differentThumbnails(song1, song2) {
     return Boolean((song1.thumbnail && !song2.thumbnail)
@@ -226,7 +157,7 @@ export function libraryDataReducer(existingData, action) {
         playlist = {playlistId: playlistId}
         dataCopy.playlists.push(playlist)
     }
-
+    log("libraryReducer: " + action.type)
     switch (action.type) {
         case SET_PLAYLISTS:
             // This is called after fetching the list of playlists from flask: /library
@@ -307,7 +238,7 @@ function reformatSongObjects(tracks) {
             track.artistsString = track.artists.map((s) => s.name).join(", ")
         } catch (e) {
             track.artistsString = "";
-            console.log(e)
+            log(e)
         }
         // set the string for the list of playlists
         try {
@@ -324,12 +255,3 @@ function reformatSongObjects(tracks) {
 
 
 
-function increaseArtistCount(artists, countObj) {
-    artists.forEach((artist) => {
-        if (countObj[artist.name]) {
-            countObj[artist.name] += 1
-        } else {
-            countObj[artist.name] = 1
-        }
-    })
-}
