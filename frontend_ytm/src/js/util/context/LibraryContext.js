@@ -145,14 +145,16 @@ function removeSongsFromPlaylistObject(playlist, removedSongs, canonSongs) {
  * @returns {*}
  */
 export function libraryDataReducer(existingData, action) {
+    log("~Begin clone deep")
     let dataCopy = cloneDeep(existingData)
+    log("~End clone deep")
     let payloadSongs = action.payload.songs;
 
     // find the playlist we're trying to modify
     let playlistId = action.payload.playlistId;
     let playlist = dataCopy.playlists.find((pl) => pl.playlistId === playlistId)
 
-    // if it doesn't exist yet: create it
+    // if it doesn't exist yet: init it
     if (!playlist && playlistId) {
         playlist = {playlistId: playlistId}
         dataCopy.playlists.push(playlist)
@@ -160,7 +162,7 @@ export function libraryDataReducer(existingData, action) {
     log("libraryReducer: " + action.type)
     switch (action.type) {
         case SET_PLAYLISTS:
-            // This is called after fetching the list of playlists from flask: /library
+            // This is called after fetching the list of playlists from flask ... /library
             let payloadPlaylists = action.payload.playlists.map((playlist) => {
                 let thisExistingPlaylist = dataCopy.playlists.find((pl) => pl.playlistId === playlist.playlistId);
 
@@ -178,7 +180,7 @@ export function libraryDataReducer(existingData, action) {
             dataCopy.playlists = payloadPlaylists;
             break;
         case SET_SONGS:
-            // This is called after fetching the songs for a playlist from flask: /playlist?id=
+            // This is called after fetching the songs for a playlist from flask ... /playlist?id=
             playlist.fetchedAllSongs = true
             addSongsToMasterList(dataCopy.songs, payloadSongs, action.payload.refresh)
             playlist.songs = getSongIds(payloadSongs);
