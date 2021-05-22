@@ -168,9 +168,9 @@ export function songPageReducer(existingData, action) {
     log("Begin clone deep")
     let dataCopy = cloneDeep(existingData)
     log("End clone deep")
+
     let newVal = action.payload;
-    log(`songPageReducer: ${action.type} : `)
-    console.log(action.payload)
+    log(`songPageReducer: ${action.type} : `, action.payload)
     switch (action.type) {
         case SET_SONG_LISTS_DATA:
             log(`Setting song data: ${dataCopy.playlistId} ${newVal.map((nv) => nv.songs.length)} songs`)

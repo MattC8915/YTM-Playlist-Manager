@@ -59,8 +59,8 @@ export default function SongTable() {
     let songLists = useMemo(() => {
         log("use memo songtable songlists")
         let songLists = cloneDeep(pageData.songLists)
+        log("done usememo clonedeep")
         songLists.forEach((songListObj) => {
-
             // set the sort function based on the column that was clicked
             if (sortFunctionColumnKey) {
                 let sortFunction = (a, b) => a[sortFunctionColumnKey] - b[sortFunctionColumnKey]

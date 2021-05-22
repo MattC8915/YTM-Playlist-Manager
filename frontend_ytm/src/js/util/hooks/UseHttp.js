@@ -3,6 +3,7 @@
  */
 import {createContext} from "react";
 import {getRequestParams, readResponseAsJSON, validateResponse} from "../RestUtil";
+import {log} from "../Utilities";
 
 export const HttpContext = createContext(null);
 
@@ -25,7 +26,12 @@ export function useHttp() {
             options = {}
         }
         let {params, opt} = getRequestParams(options);
+        log("Making request to " + pathToResource)
         return fetch(pathToResource, params)
+            .then((resp) => {
+                log("Received response from " + pathToResource)
+                return resp;
+            })
             .then(validateResponse)
             .then(readResponseAsJSON)
             // by default this will return the json response from the server, so it can be accessed from another .then clause
