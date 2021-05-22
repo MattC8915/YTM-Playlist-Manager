@@ -70,9 +70,10 @@ export default function Album(props) {
         return libraryContext.library.albums[albumId]
     }, [libraryContext.library.albums, albumId])
 
-    let songPageData =
+    let songPageObject =
         useSongPage(true, false, false, true,
             false, null);
+    let songPageData = songPageObject.songPageData;
 
     const fetchAlbumData = useCallback((forceRefresh) => {
         sendRequest(`/album/${albumId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`)
@@ -89,11 +90,11 @@ export default function Album(props) {
         if (albumData) {
             let title = albumData.title ? albumData.title : ""
             if (title !== songPageData.title) {
-                songPageData.setTitle(title);
+                songPageObject.setTitle(title);
             }
             songList.songs = albumData.songs || []
             // TODO next these lists should just be lists of song/album ids I think
-            songPageData.setSongData(songList)
+            songPageObject.setSongData(songList)
         }
     }, [albumData, songPageData.title]) // ignore songList, songPageData
 
@@ -106,7 +107,7 @@ export default function Album(props) {
     }, [albumData, albumId, fetchAlbumData, fetchedAlready])
 
     return (
-        <SongPageContext.Provider value={{data: songPageData, fetchData: fetchAlbumData}}>
+        <SongPageContext.Provider value={{data: songPageObject, fetchData: fetchAlbumData}}>
             <SongPageHeader/>
             {albumData && (
                 <div>

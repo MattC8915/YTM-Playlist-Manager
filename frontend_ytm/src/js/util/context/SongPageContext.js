@@ -63,12 +63,13 @@ export function useSongPage(showAddToButton, showRemoveFromButton, showAlbumView
 
     let defaultVal = new SongPageData(showAddToButton, showRemoveFromButton, showAlbumView, showSearchBar, showDuplicateCount, playlistId)
     let [songPageData, dispatch] = useReducer(songPageReducer, defaultVal, () => defaultVal)
+    let dataAndFunctions = {songPageData: songPageData}
 
     /**
      * Removes the given songs from the given playlist
      * Each songObject must have a videoId and setVideoId property
      */
-    songPageData.removeSongsFromPlaylist = (playlistId, songObjects) => {
+    dataAndFunctions.removeSongsFromPlaylist = (playlistId, songObjects) => {
         songObjects = songObjects.map((song) => {
             return {"videoId": song.videoId, "setVideoId": song.setVideoId}
         })
@@ -87,7 +88,7 @@ export function useSongPage(showAddToButton, showRemoveFromButton, showAlbumView
             })
     }
 
-    songPageData.setSongData = function(songLists) {
+    dataAndFunctions.setSongData = function(songLists) {
         if (!Array.isArray(songLists)) {
             songLists = [songLists]
         }
@@ -108,34 +109,34 @@ export function useSongPage(showAddToButton, showRemoveFromButton, showAlbumView
         dispatch({type: SET_SONG_LISTS_DATA, payload: songLists})
     }
 
-    songPageData.setNumDuplicates = function(val) {
+    dataAndFunctions.setNumDuplicates = function(val) {
         dispatch({type: SET_NUM_DUPLICATES, payload: val})
     }
-    songPageData.setTitle = function(val) {
+    dataAndFunctions.setTitle = function(val) {
         dispatch({type: SET_TITLE, payload: val})
     }
-    songPageData.setSelectedRowIds = function(val) {
+    dataAndFunctions.setSelectedRowIds = function(val) {
         dispatch({type: SET_SELECTED_ROW_IDS, payload: val})
     }
-    songPageData.setPlaylistId = function(val) {
+    dataAndFunctions.setPlaylistId = function(val) {
         dispatch({type: SET_PLAYLIST_ID, payload: val})
     }
-    songPageData.setFilterDupes = function(val) {
+    dataAndFunctions.setFilterDupes = function(val) {
         dispatch({type: SET_FILTER_DUPES, payload: val})
     }
-    songPageData.setIsDataLoading = function(val) {
+    dataAndFunctions.setIsDataLoading = function(val) {
         dispatch({type: SET_IS_LOADING, payload: val})
     }
-    songPageData.setAlbumView = function(val) {
+    dataAndFunctions.setAlbumView = function(val) {
         dispatch({type: SET_ALBUM_VIEW, payload: val, canonSongs: libraryContext.library.songs})
     }
-    songPageData.setHideAlbums = function(val) {
+    dataAndFunctions.setHideAlbums = function(val) {
         dispatch({type: SET_HIDE_ALBUMS, payload: val})
     }
-    songPageData.setHideSingles = function(val) {
+    dataAndFunctions.setHideSingles = function(val) {
         dispatch({type: SET_HIDE_SINGLES, payload: val})
     }
-    return songPageData
+    return dataAndFunctions
 }
 
 function setSongListAlbums(data) {

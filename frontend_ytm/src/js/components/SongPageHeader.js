@@ -7,7 +7,9 @@ import {SongPageContext} from "../util/context/SongPageContext";
 
 export default function SongPageHeader() {
     let songTableContext = useContext(SongPageContext)
-    let pageData = songTableContext.data
+    let pageObject = songTableContext.data
+    let pageData = pageObject.songPageData;
+
     return (
         <PageHeader
             onBack={()=> window.history.back()}
@@ -20,7 +22,7 @@ export default function SongPageHeader() {
                     </Button>
                     {" "}
                     {pageData.showDuplicateCount && pageData.numDuplicates > 0 && (
-                        <Button onClick={() => pageData.setFilterDupes(!pageData.filterByDupes)}>
+                        <Button onClick={() => pageObject.setFilterDupes(!pageData.filterByDupes)}>
                             <Badge count={`Dupes found (${pageData.numDuplicates})`}/>
                         </Button>
                     )}
@@ -29,7 +31,7 @@ export default function SongPageHeader() {
                     {pageData.showAlbumView &&
                         <Checkbox
                             checked={pageData.albumView}
-                            onChange={() => pageData.setAlbumView(!pageData.albumView)}>
+                            onChange={() => pageObject.setAlbumView(!pageData.albumView)}>
                             <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
                                 Album View
                             </div>
@@ -40,7 +42,7 @@ export default function SongPageHeader() {
                     {pageData.showAlbumView && pageData.albumView && (
                         <Checkbox
                             checked={pageData.hideSingles}
-                            onChange={() => pageData.setHideSingles(!pageData.hideSingles)}>
+                            onChange={() => pageObject.setHideSingles(!pageData.hideSingles)}>
                             <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
                                 Hide Singles
                             </div>
@@ -51,7 +53,7 @@ export default function SongPageHeader() {
                     {pageData.showAlbumView && pageData.albumView && (
                         <Checkbox
                             checked={pageData.hideAlbums}
-                            onChange={() => pageData.setHideAlbums(!pageData.hideAlbums)}>
+                            onChange={() => pageObject.setHideAlbums(!pageData.hideAlbums)}>
                             <div style={{float: 'left', paddingRight: "5px", paddingLeft: "50px"}}>
                                 Hide Albums
                             </div>

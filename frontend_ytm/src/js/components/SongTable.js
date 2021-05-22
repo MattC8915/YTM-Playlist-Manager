@@ -12,7 +12,8 @@ import {log} from "../util/Utilities";
 export default function SongTable() {
     // noinspection JSCheckFunctionSignatures
     let songTableContext = useContext(SongPageContext);
-    let pageData = songTableContext.data;
+    let pageObject = songTableContext.data;
+    let pageData = pageObject.songPageData;
     let [shuffleSongsOnAdd, setShuffleSongsOnAdd] = useState(false)
     // noinspection JSCheckFunctionSignatures
     let toastContext = useContext(MyToastContext);
@@ -246,10 +247,10 @@ export default function SongTable() {
      */
     function removeSelectedRows() {
         let selectedSongs = getSelectedSongs(false, false)
-        pageData.removeSongsFromPlaylist(pageData.playlistId, selectedSongs)
+        pageObject.removeSongsFromPlaylist(pageData.playlistId, selectedSongs)
             .then(() => {
                 // de-select all rows
-                pageData.setSelectedRowIds([])
+                pageObject.setSelectedRowIds([])
             })
             .catch((resp) => {
                 log("Error removing songs:")
@@ -262,7 +263,7 @@ export default function SongTable() {
                         let newSelectedRowIds = fetchedSongs
                             .filter((song) => selectedSongs.includes(song.id))
                             .map((song) => song.id)
-                        pageData.setSelectedRowIds(newSelectedRowIds);
+                        pageObject.setSelectedRowIds(newSelectedRowIds);
                     }
                 })
             })
@@ -320,7 +321,7 @@ export default function SongTable() {
             <Button type={"primary"}
                     style={{marginLeft: "10px"}}
                     disabled={pageData.selectedRowIds.length === 0}
-                    onClick={() => pageData.setSelectedRowIds([])}>
+                    onClick={() => pageObject.setSelectedRowIds([])}>
                 De-select All ({pageData.selectedRowIds.length})
             </Button>
 
@@ -390,7 +391,7 @@ export default function SongTable() {
                                 log(newSelectedRowIds)
                             }
 
-                            pageData.setSelectedRowIds(newSelectedRowIds)
+                            pageObject.setSelectedRowIds(newSelectedRowIds)
                         },
                     }}
                 />

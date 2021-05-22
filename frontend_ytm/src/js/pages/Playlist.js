@@ -150,9 +150,9 @@ export default function Playlist(props) {
     let playlistId = props.playlistId
     let songList = new SongList("playlist", [], false, 1, ReleaseType.SONG,
         preparePlaylistSongForTable, columns, ["topRight", "bottomRight"], {offsetHeader: 50+66+24});
-    let songPageData = useSongPage(true, !props.hideRemoveButton, true,
+    let songPageObject = useSongPage(true, !props.hideRemoveButton, true,
         true, !props.hideDupeCount, playlistId)
-
+    let songPageData = songPageObject.songPageData;
     let library = libraryContext.library;
     let playlist = useMemo(() => {
         log("usememo Playlist: " + playlistId)
@@ -166,23 +166,23 @@ export default function Playlist(props) {
     const fetchSongs = useCallback((forceRefresh) => {
         // save the ids of the selected rows, so they can be selected again after retrieving data
         log("Fetching playlist songs")
-        songPageData.setIsDataLoading(true);
+        songPageObject.setIsDataLoading(true);
         return sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
-                songPageData.setIsDataLoading(false);
+                songPageObject.setIsDataLoading(false);
                 let songs = resp.tracks
                 libraryContext.setSongs(playlistId, songs, forceRefresh)
                 log("DONE Fetching playlist songs")
                 return songs;
             })
             .catch((resp) => {
-                songPageData.setIsDataLoading(false);
+                songPageObject.setIsDataLoading(false);
                 log("ERROR")
                 log(resp)
                 toastContext.addToast("Error loading data", ERROR_TOAST)
                 return []
             })
-    }, [libraryContext, playlistId, sendRequest, songPageData, toastContext])
+    }, [libraryContext, playlistId, sendRequest, songPageObject, toastContext])
 
     useEffect(() => {
         // fetch song data from backend if not done already
@@ -194,7 +194,7 @@ export default function Playlist(props) {
         }
         if (playlistId !== songPageData.playlistId) {
             log("setting playlist id " + playlistId)
-            songPageData.setPlaylistId(playlistId)
+            songPageObject.setPlaylistId(playlistId)
         }
     }, [fetchSongs, playlistId]) // ignored songPageData, alreadyFetchedSongs, playlist.fetchedAllSongs
 
@@ -204,7 +204,7 @@ export default function Playlist(props) {
         // only display duplicate songs (if requested)
         if (songPageData.filterByDupes) {
             if (dupes.length === 0) {
-                songPageData.setFilterDupes(false);
+                songPageObject.setFilterDupes(false);
                 songList.songs = playlist.songs;
             }
             songList.songs = dupes;
@@ -213,10 +213,10 @@ export default function Playlist(props) {
         }
 
         log("halfway done useeffect find dupes")
-        songPageData.setSongData(songList)
-        songPageData.setNumDuplicates(dupes.length)
+        songPageObject.setSongData(songList)
+        songPageObject.setNumDuplicates(dupes.length)
         log("DONE useeffect find dupes")
-    }, [songPageData.filterByDupes, playlist.songs]) // ignored songList, songPageData
+    }, [songPageObject.filterByDupes, playlist.songs]) // ignored songList, songPageData
 
     useEffect(() => {
         let headerTitle = (
@@ -225,13 +225,13 @@ export default function Playlist(props) {
                 <span key={1}>{playlist && playlist.title ? playlist.title : ""}</span>
                 <small key={2}> ({playlist.songs.length} songs)</small>
             </span>)
-        songPageData.setTitle(headerTitle);
-    }, [playlist]) // songPageData ignored
+        songPageObject.setTitle(headerTitle);
+    }, [playlist.title, playlist.songs]) // songPageData ignored
 
 
     // noinspection JSUnusedGlobalSymbols
     return (
-        <SongPageContext.Provider value={{data: songPageData, fetchData: fetchSongs}}>
+        <SongPageContext.Provider value={{data: songPageObject, fetchData: fetchSongs}}>
 
             {/* Page header with refresh and back buttons */}
             <SongPageHeader/>

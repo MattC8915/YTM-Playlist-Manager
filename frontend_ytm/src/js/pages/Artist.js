@@ -78,9 +78,10 @@ export default function Artist(props) {
         return libraryContext.library.artists[artistId]
     }, [libraryContext.library.artists, artistId])
 
-    let songPageData =
+    let songPageObject =
         useSongPage(true, false, false, true,
             false, null);
+    let songPageData = songPageObject.songPageData;
 
     const fetchArtistData = useCallback((forceRefresh) => {
         log("Getting artist " + artistId)
@@ -99,12 +100,12 @@ export default function Artist(props) {
         if (artistData) {
             let title = artistData.name ? artistData.name : ""
             if (title !== songPageData.title) {
-                songPageData.setTitle(title);
+                songPageObject.setTitle(title);
             }
             singleList.songs = artistData.singles
             albumList.songs = artistData.albums
             // TODO next these lists should just be lists of song/album ids I think
-            songPageData.setSongData([albumList, singleList])
+            songPageObject.setSongData([albumList, singleList])
         }
     }, [artistData, songPageData.title]) // ignore albumList, singleList, songPageData
 
@@ -117,7 +118,7 @@ export default function Artist(props) {
     }, [artistData, artistId, fetchArtistData, fetchedAlready])
 
     return (
-        <SongPageContext.Provider value={{data: songPageData, fetchData: fetchArtistData}}>
+        <SongPageContext.Provider value={{data: songPageObject, fetchData: fetchArtistData}}>
             <SongPageHeader/>
             {artistData && (
                 <div>
