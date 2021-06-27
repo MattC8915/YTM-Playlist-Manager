@@ -5,20 +5,28 @@
  * Shows warning when duplicate songs are found in the playlist.
  */
 import React from 'react';
-import {useMemo, useCallback, useEffect, useState, useContext} from "react";
+import {useCallback, useEffect, useState, useContext} from "react";
 import {ERROR_TOAST} from "../App";
-import {LibraryContext} from "../util/context/LibraryContext";
-import {MyToastContext} from "../util/context/MyToastContext";
-import {useHttp} from "../util/hooks/UseHttp";
+import {MyToastContext} from "../context/MyToastContext";
+import {useHttp} from "../hooks/UseHttp";
 import SongTable from "../components/SongTable";
-import {isAlbumRow, ReleaseType, SongList, SongPageContext, useSongPage} from "../util/context/SongPageContext";
 import SongPageHeader from "../components/SongPageHeader";
 import Thumbnail from "../components/Thumbnail";
 import {Button, Popover} from "antd";
 import {Link} from "@reach/router";
-import {useEffectDebugger} from "../util/hooks/UseEffectDebug";
-import {log} from "../util/Utilities";
-
+import {log} from "../util/logger";
+import {useSelector} from "react-redux"
+import {setSongsForPlaylistDispatch} from "../redux/dispatchers/library_dispatcher";
+import {
+    isAlbumRow,
+    ReleaseType,
+    SONG_PAGE_PLAYLIST,
+    SongList, SongPageConfig
+} from "../redux/reducers/SongPageReducer";
+import { setFilterDupesDispatch, setIsDataLoadingDispatch, setNumDuplicatesDispatch,
+    setSongListDispatch, setTitleDispatch } from "../redux/dispatchers/songpage_dispatcher";
+import useSongPage, {useSongPageInit} from "../hooks/UseSongPage";
+import {useEffectDebugger} from "../hooks/UseEffectDebug";
 
 export function songsExist(playlist) {
     return playlist && playlist.songs && playlist.songs.length > 0;
@@ -126,38 +134,43 @@ const columns = [
 ]
 
 /**
- * Set necessary fields on the song object so the SongTable renders and functions correctly
- * @param allSongData the canon song object from the LibraryContext
+ * Set necessary fields on the song object so the SongTable renders and functions correctly (setVideoId, id, index, isDupe
+ * @param allSongData the canon song object from the master list of songs
  * @param songInPlaylistObj contains playlist-specific fields like setVideoId, isDupe, and playlist index
  */
-function preparePlaylistSongForTable(allSongData, songInPlaylistObj) {
+export function preparePlaylistSongForTable(allSongData, songInPlaylistObj) {
+    // songsInPlaylistObj is immutable
     allSongData.setVideoId = songInPlaylistObj.setVideoId
     allSongData.id = songInPlaylistObj.setVideoId
-    songInPlaylistObj.id = songInPlaylistObj.setVideoId
+    // songInPlaylistObj.id = songInPlaylistObj.setVideoId
     allSongData.isDupe = songInPlaylistObj.isDupe
     if (!allSongData.setVideoId) {
         // this is necessary because songs in history don't have a setVideoId
         // (We don't need to worry about duplicate videoIds bc YTM should make sure a song doesn't appear in history twice)
-        songInPlaylistObj.setVideoId = songInPlaylistObj.videoId;
+        allSongData.setVideoId = songInPlaylistObj.videoId;
     }
 }
 
 export default function Playlist(props) {
-    let libraryContext = useContext(LibraryContext);
     let toastContext = useContext(MyToastContext);
     let sendRequest = useHttp();
     let [alreadyFetchedSongs, setAlreadyFetchedSongs] = useState(false);
     let playlistId = props.playlistId
+
     let songList = new SongList("playlist", [], false, 1, ReleaseType.SONG,
-        preparePlaylistSongForTable, columns, ["topRight", "bottomRight"], {offsetHeader: 50+66+24});
-    let songPageObject = useSongPage(true, !props.hideRemoveButton, true,
-        true, !props.hideDupeCount, playlistId)
-    let songPageData = songPageObject.songPageData;
-    let library = libraryContext.library;
-    let playlist = useMemo(() => {
-        log("usememo Playlist: " + playlistId)
-        return library.playlists.find((pl) => pl.playlistId === playlistId)  || {"songs": []}
-    }, [library.playlists, playlistId])
+        "preparePlaylistSongForTable", columns, ["topRight", "bottomRight"], {offsetHeader: 50+66+24});
+
+    let songPageConfig = new SongPageConfig(true, !props.hideRemoveButton, true,
+        true, !props.hideDupeCount, playlistId, SONG_PAGE_PLAYLIST)
+    let songPageData = useSongPageInit(songPageConfig)
+
+    let playlist = useSelector((state) => {
+        // look in the library state
+        log("useselectr Playlist: " + playlistId)
+        return state.library.playlists.find((pl) => {
+            return pl.playlistId === playlistId
+        })
+    }) || {"songs": []}
 
     /**
      * Get all the songs in this playlist from the backend.
@@ -166,25 +179,26 @@ export default function Playlist(props) {
     const fetchSongs = useCallback((forceRefresh) => {
         // save the ids of the selected rows, so they can be selected again after retrieving data
         log("Fetching playlist songs")
-        songPageObject.setIsDataLoading(true);
+        setIsDataLoadingDispatch(true, songPageData.songPageId);
         return sendRequest(`/playlist/${playlistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
-                songPageObject.setIsDataLoading(false);
+                setIsDataLoadingDispatch(false, songPageData.songPageId);
                 let songs = resp.tracks
-                libraryContext.setSongs(playlistId, songs, forceRefresh)
+                setSongsForPlaylistDispatch(playlistId, songs, forceRefresh)
+                // TODO next either call setSongListDispatch here. Or add a useEffect that listens to changes in playlist.songs
                 log("DONE Fetching playlist songs")
                 return songs;
             })
             .catch((resp) => {
-                songPageObject.setIsDataLoading(false);
+                setIsDataLoadingDispatch(false, songPageData.songPageId);
                 log("ERROR")
                 log(resp)
                 toastContext.addToast("Error loading data", ERROR_TOAST)
                 return []
             })
-    }, [libraryContext, playlistId, sendRequest, songPageObject, toastContext])
+    }, [playlistId, sendRequest, songPageData.songPageId, toastContext])
 
-    useEffect(() => {
+    useEffectDebugger(() => {
         // fetch song data from backend if not done already
         if (playlistId && !playlist.fetchedAllSongs && !alreadyFetchedSongs) {
             log("fetching songs")
@@ -193,18 +207,25 @@ export default function Playlist(props) {
             setAlreadyFetchedSongs(true);
         }
         if (playlistId !== songPageData.playlistId) {
-            log("setting playlist id " + playlistId)
-            songPageObject.setPlaylistId(playlistId)
+            throw new Error("Why tf did this happen")
         }
-    }, [fetchSongs, playlistId]) // ignored songPageData, alreadyFetchedSongs, playlist.fetchedAllSongs
+    }, [fetchSongs, playlistId, songPageData.playlistId]) // ignored alreadyFetchedSongs, playlist.fetchedAllSongs
 
-    useEffect(() => {
+    useEffectDebugger(() => {
+        console.log("playlist")
+    }, [playlist])
+
+    useEffectDebugger(() => {
+        console.log("playlist songs")
+    }, [playlist.songs])
+
+    useEffectDebugger(() => {
         log("useeffect find dupes")
         let dupes = playlist.songs.filter((song) => song.isDupe)
-        // only display duplicate songs (if requested)
         if (songPageData.filterByDupes) {
+            // only display duplicate songs
             if (dupes.length === 0) {
-                songPageObject.setFilterDupes(false);
+                setFilterDupesDispatch(false, songPageData.songPageId);
                 songList.songs = playlist.songs;
             }
             songList.songs = dupes;
@@ -212,34 +233,36 @@ export default function Playlist(props) {
             songList.songs = playlist.songs;
         }
 
-        log("halfway done useeffect find dupes")
-        songPageObject.setSongData(songList)
-        songPageObject.setNumDuplicates(dupes.length)
+        setSongListDispatch([songList], songPageData.songPageId)
+        setNumDuplicatesDispatch(dupes.length, songPageData.songPageId)
         log("DONE useeffect find dupes")
-    }, [songPageObject.filterByDupes, playlist.songs]) // ignored songList, songPageData
+    }, [playlist.songs, songPageData.filterByDupes]) // ignored songList, songPageData
 
-    useEffect(() => {
-        let headerTitle = (
-            <span>
-                {/*I need keys here because of the way antd renders the title (apparently they use .map() without assigning keys)*/}
-                <span key={1}>{playlist && playlist.title ? playlist.title : ""}</span>
-                <small key={2}> ({playlist.songs.length} songs)</small>
-            </span>)
-        songPageObject.setTitle(headerTitle);
+    useEffectDebugger(() => {
+        // let headerTitle = (
+        //     <span>
+        //         {/*I need keys here because of the way antd renders the title (apparently they use .map() without assigning keys)*/}
+        //         <span key={1}>{playlist && playlist.title ? playlist.title : ""}</span>
+        //         <small key={2}> ({playlist.songs.length} songs)</small>
+        //     </span>)
+        let headerTitle = `${playlist && playlist.title ? playlist.title : ""} (${playlist.songs.length} songs)`
+        setTitleDispatch(headerTitle, songPageData.songPageId);
     }, [playlist.title, playlist.songs]) // songPageData ignored
 
 
     // noinspection JSUnusedGlobalSymbols
     return (
-        <SongPageContext.Provider value={{data: songPageObject, fetchData: fetchSongs}}>
-
+        // <SongPageContext.Provider value={{data: songPageData, fetchData: fetchSongs}}>
+        <div>
             {/* Page header with refresh and back buttons */}
-            <SongPageHeader/>
+            <SongPageHeader songPageId={songPageData.songPageId} songPageType={SONG_PAGE_PLAYLIST}
+                            fetchData={fetchSongs}/>
 
             {/*Table with all the songs*/}
-            <SongTable/>
-
-        </SongPageContext.Provider>
+            <SongTable songPageId={songPageData.songPageId} songPageType={SONG_PAGE_PLAYLIST}
+                       fetchData={fetchSongs}/>
+        </div>
+        // </SongPageContext.Provider>
 
     );
 }

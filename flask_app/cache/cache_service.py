@@ -102,6 +102,7 @@ class CachedData:
             logMessage(f"Getting data for [{self.data_type.value}: {data_id}] from [{'YTM' if use_api else 'DB'}]")
         if use_api:
             data = self.getDataFromYTMWrapper(data_id, extra_data)
+            # TODO need to delete all existing data with this id. Including from the data_cache table
         else:
             data = self.getDataFromDb(data_id, extra_data)
 

@@ -1,14 +1,21 @@
-import {LibraryContext} from "../util/context/LibraryContext";
-import {MyToastContext} from "../util/context/MyToastContext";
-import {useHttp} from "../util/hooks/UseHttp";
-import {ReleaseType, SongList, SongPageContext, useSongPage} from "../util/context/SongPageContext";
+import {MyToastContext} from "../context/MyToastContext";
+import {useHttp} from "../hooks/UseHttp";
 import {ERROR_TOAST} from "../App";
 import SongPageHeader from "../components/SongPageHeader";
 import Thumbnail from "../components/Thumbnail";
 import SongTable from "../components/SongTable";
-import {useCallback, useContext, useEffect, useMemo, useState} from "react";
+import {useCallback, useContext, useEffect, useState} from "react";
 import {renderArtistLinkToLocal, renderIndexWithMetadata, renderSongLinkToYtm} from "./Playlist";
-
+import {useSelector} from "react-redux"
+import {setAlbumDispatch} from "../redux/dispatchers/library_dispatcher";
+import {
+    ReleaseType,
+    setSongListData,
+    SONG_PAGE_ALBUM,
+    SongList, SongPageConfig
+} from "../redux/reducers/SongPageReducer";
+import useSongPage, {useSongPageInit} from "../hooks/UseSongPage";
+import {setTitleDispatch} from "../redux/dispatchers/songpage_dispatcher";
 
 const columns = [
     {
@@ -60,43 +67,42 @@ export default function Album(props) {
     let toastContext = useContext(MyToastContext)
     let sendRequest = useHttp();
     let albumId = props.albumId;
-    let libraryContext = useContext(LibraryContext);
     let songList = new SongList("", [], false, 1, ReleaseType.SONG,
         ()=>{}, columns, [], false)
 
     let [fetchedAlready, setFetchedAlready] = useState(false);
 
-    let albumData = useMemo(() => {
-        return libraryContext.library.albums[albumId]
-    }, [libraryContext.library.albums, albumId])
+    let albumData = useSelector((state) => {
+        return state.library.albums[albumId]
+    })
 
-    let songPageObject =
-        useSongPage(true, false, false, true,
-            false, null);
-    let songPageData = songPageObject.songPageData;
+    // let songPageObject = useSongPage(true, false, false, true, false, null);
+    let songPageConfig = new SongPageConfig(true, false, false,
+        true, false, albumId, SONG_PAGE_ALBUM)
+    let songPageData = useSongPageInit(songPageConfig)
 
     const fetchAlbumData = useCallback((forceRefresh) => {
         sendRequest(`/album/${albumId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`)
             .then((resp) => {
-                libraryContext.setAlbum(resp)
+                setAlbumDispatch(resp)
             })
             .catch((resp) => {
                 toastContext.addToast("Error fetching album data", ERROR_TOAST)
             })
-    }, [albumId, libraryContext, sendRequest, toastContext])
+    }, [albumId, sendRequest, toastContext])
 
     useEffect(() => {
         // set the title and the songs
         if (albumData) {
             let title = albumData.title ? albumData.title : ""
             if (title !== songPageData.title) {
-                songPageObject.setTitle(title);
+                setTitleDispatch(title, songPageData.songPageId);
             }
             songList.songs = albumData.songs || []
             // TODO next these lists should just be lists of song/album ids I think
-            songPageObject.setSongData(songList)
+            setSongListData(songList, songPageData.songPageId)
         }
-    }, [albumData, songPageData.title]) // ignore songList, songPageData
+    }, [albumData, songPageData.songPageId, songPageData.title]) // ignore songList, songPageData
 
     useEffect(() => {
         // fetch artist data
@@ -107,8 +113,9 @@ export default function Album(props) {
     }, [albumData, albumId, fetchAlbumData, fetchedAlready])
 
     return (
-        <SongPageContext.Provider value={{data: songPageObject, fetchData: fetchAlbumData}}>
-            <SongPageHeader/>
+        <div>
+            <SongPageHeader songPageId={albumId} songPageType={SONG_PAGE_ALBUM}
+                            fetchData={fetchAlbumData}/>
             {albumData && (
                 <div>
                     <div style={{float:"left", paddingRight: "1em"}}>
@@ -119,9 +126,9 @@ export default function Album(props) {
             )}
 
             <div style={{clear:"both"}}>
-                <SongTable/>
+                <SongTable songPageId={albumId} songPageType={SONG_PAGE_ALBUM}
+                           fetchData={fetchAlbumData}/>
             </div>
-
-        </SongPageContext.Provider>
+        </div>
     )
 }

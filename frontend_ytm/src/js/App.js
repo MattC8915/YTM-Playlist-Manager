@@ -1,28 +1,22 @@
 import {useEffect, useState, useCallback, useReducer} from "react";
-import {useHttp} from "./util/hooks/UseHttp";
-import {clearSessionStorage, useReducerWithSessionStorage} from "./util/hooks/UseSessionStorage";
+import {useHttp} from "./hooks/UseHttp";
+import {clearSessionStorage, useReducerWithSessionStorage} from "./hooks/UseSessionStorage";
 import {Router} from "@reach/router"
 import {toast, ToastContainer} from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 import {Menu} from "antd"
 import {OrderedListOutlined, EditOutlined, HistoryOutlined} from "@ant-design/icons"
 import {useNavigate} from "@reach/router";
-import {MyToastContext} from "./util/context/MyToastContext";
-import {
-    ADD_SONGS,
-    LibraryContext,
-    libraryDataReducer,
-    REMOVE_SONGS, SET_ALBUM, SET_ARTIST,
-    SET_PLAYLISTS,
-    SET_SONGS, SORT_SONGS
-} from "./util/context/LibraryContext";
+import {MyToastContext} from "./context/MyToastContext";
 import ListenHistory from "./pages/ListenHistory";
 import PlaylistList from "./pages/PlaylistList";
 import Playlist from "./pages/Playlist";
 import Button from "antd/lib/button/button";
 import Artist from "./pages/Artist";
 import Album from "./pages/Album";
-import {log} from "./util/Utilities";
+import {log} from "./util/logger";
+import {setPlaylistsDispatch} from "./redux/dispatchers/library_dispatcher";
+import {useSelector} from "react-redux";
 
 export const INFO_TOAST = "INFO";
 export const SUCCESS_TOAST = "SUCCESS";
@@ -30,13 +24,14 @@ export const WARNING_TOAST = "WARNING";
 export const ERROR_TOAST = "ERROR";
 
 function App() {
-    let [libraryData, playlistsDispatch] = useReducerWithSessionStorage(
-        "library", libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}});
     // let [libraryData, playlistsDispatch] = useReducer(libraryDataReducer, {"playlists": [], "songs": {}, "artists": {}, "albums": {}})
     let [loadedPlaylists, setLoadedPlaylists] = useState(false);
     let sendRequest = useHttp();
     let [navKey, setNavKey] = useState("library")
     let nav = useNavigate()
+    let playlists = useSelector((state) => {
+        return state.library.playlists
+    })
 
     /**
      * Helper function to add a unicode character at the beginning of a string
@@ -82,30 +77,6 @@ function App() {
 
 
 
-    const setPlaylists = useCallback((playlists) => {
-        playlistsDispatch({type: SET_PLAYLISTS, payload: {playlists: playlists}})
-    }, [playlistsDispatch])
-
-    function setArtist(data) {
-        playlistsDispatch({type: SET_ARTIST, payload: {artist: data}})
-    }
-    function setAlbum(data) {
-        playlistsDispatch({type: SET_ALBUM, payload: {album: data}})
-    }
-    function setSongsForPlaylist(playlistId, songs, refreshSongs) {
-        playlistsDispatch({type: SET_SONGS, payload: {songs: songs, playlistId: playlistId, refresh: refreshSongs}})
-    }
-    function sortSongsForPlaylist(playlistId, songs) {
-        playlistsDispatch({type: SORT_SONGS, payload: {songs: songs, playlistId: playlistId}})
-    }
-    function addSongsToPlaylist(playlistId, songs) {
-        playlistsDispatch({type: ADD_SONGS, payload: {songs: songs, playlistId: playlistId}})
-    }
-    function removeSongsFromState(playlistId, songs) {
-        playlistsDispatch({type: REMOVE_SONGS, payload: {songs: songs, playlistId: playlistId}})
-    }
-
-
     /**
      * Fetch the list of playlists from the backend
      * @param forceRefresh: boolean - whether or not we should force the backend to get the most recent data from YTM
@@ -114,7 +85,7 @@ function App() {
         // log("load playlists")
         return sendRequest(`/library?ignoreCache=${forceRefresh ? 'true' : 'false'}`, "GET")
             .then((resp) => {
-                setPlaylists(resp);
+                setPlaylistsDispatch(resp);
                 return resp;
             })
             .catch((error) => {
@@ -122,7 +93,7 @@ function App() {
                 addToast("Error loading library", ERROR_TOAST)
                 return error;
             })
-    }, [addToast, sendRequest, setPlaylists])
+    }, [addToast, sendRequest])
 
 
     useEffect(() => {
@@ -162,9 +133,6 @@ function App() {
 
     return (
       <div>
-          <LibraryContext.Provider value={{library: libraryData, addSongs: addSongsToPlaylist,
-              setSongs: setSongsForPlaylist, sortSongs: sortSongsForPlaylist,
-              removeSongs: removeSongsFromState, setArtist: setArtist, setAlbum: setAlbum}}>
           <MyToastContext.Provider value={{addToast: addToast}}>
               <ToastContainer
                   position="top-right"
@@ -198,7 +166,7 @@ function App() {
               </Menu>
               <Router>
                 <PlaylistList path={"/"}
-                              playlists={libraryData.playlists}
+                              playlists={playlists}
                               loadPlaylists={loadPlaylists}
                 />
                 <ListenHistory path={"/history"}/>
@@ -207,7 +175,6 @@ function App() {
                 <Album path={"/album/:albumId"}/>
               </Router>
           </MyToastContext.Provider>
-          </LibraryContext.Provider>
       </div>
     );
 }

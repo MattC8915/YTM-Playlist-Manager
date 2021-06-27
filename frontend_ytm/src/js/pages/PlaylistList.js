@@ -6,7 +6,7 @@ import {useNavigate} from "@reach/router";
 import {Button, PageHeader, Table} from "antd";
 import {SyncOutlined} from "@ant-design/icons"
 import Thumbnail from "../components/Thumbnail";
-import {log} from "../util/Utilities";
+import {log} from "../util/logger";
 
 export default function PlaylistList(props) {
     let nav = useNavigate();

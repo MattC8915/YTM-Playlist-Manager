@@ -1,31 +1,27 @@
 import {Button, Checkbox, Input, Popover, Table} from "antd";
 import React, {useCallback, useContext, useMemo, useState} from "react";
-import {Link} from "@reach/router";
 import debounce from "lodash/debounce";
 import {ERROR_TOAST, SUCCESS_TOAST} from "../App";
-import {ReleaseType, SongPageContext} from "../util/context/SongPageContext";
-import {MyToastContext} from "../util/context/MyToastContext";
-import {useHttp} from "../util/hooks/UseHttp";
-import {cloneDeep, groupSongsByAlbum, LibraryContext} from "../util/context/LibraryContext";
-import {log} from "../util/Utilities";
+import {MyToastContext} from "../context/MyToastContext";
+import {useHttp} from "../hooks/UseHttp";
+import {log} from "../util/logger";
+import {useSelector} from "react-redux";
+import {addSongsToPlaylistDispatch, removeSongsDispatch} from "../redux/dispatchers/library_dispatcher";
+import useSongPage from "../hooks/UseSongPage";
+import {setSelectedRowIdsDispatch} from "../redux/dispatchers/songpage_dispatcher";
 
-export default function SongTable() {
-    // noinspection JSCheckFunctionSignatures
-    let songTableContext = useContext(SongPageContext);
-    let pageObject = songTableContext.data;
-    let pageData = pageObject.songPageData;
-    let [shuffleSongsOnAdd, setShuffleSongsOnAdd] = useState(false)
-    // noinspection JSCheckFunctionSignatures
+export default function SongTable(props) {
     let toastContext = useContext(MyToastContext);
-    // noinspection JSCheckFunctionSignatures
-    let libraryContext = useContext(LibraryContext);
-    let myLibrary = libraryContext.library;
+    let [shuffleSongsOnAdd, setShuffleSongsOnAdd] = useState(false)
     let [sortFunctionColumnKey, setSortFunctionColumnKey] = useState(null);
     let sendRequest = useHttp();
     let [searchFilter, setSearchFilter] = useState("")
 
     let [showAddToPlaylistPopup, setShowAddToPlaylistPopup] = useState(false);
     let [selectedPlaylist, setSelectedPlaylist] = useState([]);
+    let canonSongList = useSelector((state) => state.library.songs);
+    let canonPlaylistList = useSelector((state) => state.library.playlists);
+    let pageData = useSongPage(props.songPageId)
 
     /**
      * Filter songs based on the user's search. And optionally group them by albums
@@ -54,13 +50,12 @@ export default function SongTable() {
     }, [searchFilter])
 
     /**
-     * Set playlist-dependent properties like index, setVideoId and isDupe.
-     * And create the render object for every other playlist it belongs to
+     * Sort the songs based on the column the user clicked on
      */
     let songLists = useMemo(() => {
-        log("use memo songtable songlists")
-        let songLists = cloneDeep(pageData.songLists)
-        log("done usememo clonedeep")
+        log("use memo songlists")
+        // let songLists = cloneDeep(pageData.songLists)
+        let songLists = pageData.songLists
         songLists.forEach((songListObj) => {
             // set the sort function based on the column that was clicked
             if (sortFunctionColumnKey) {
@@ -73,7 +68,7 @@ export default function SongTable() {
         }
         log("DONE use memo songtable songlists")
         return songLists;
-    }, [pageData.songLists, pageData.albumView, searchFilter, sortFunctionColumnKey, filterSongs])
+    }, [pageData.songLists, pageData.albumView, searchFilter, sortFunctionColumnKey]) // ignore filteredSongs
 
     /**
      * Returns the song objects that are currently selected
@@ -116,8 +111,8 @@ export default function SongTable() {
     const getSelectedCanonSongs = useCallback((includeAlbums, preserveOrder) => {
         // TODO this won't work for albums
         let selectedSongIds = getSelectedSongs(includeAlbums, preserveOrder).map((selSong) => selSong.videoId);
-        return selectedSongIds.map((songId) => myLibrary.songs[songId])
-    }, [getSelectedSongs, myLibrary.songs])
+        return selectedSongIds.map((songId) => canonSongList[songId])
+    }, [getSelectedSongs, canonSongList])
 
     /**
      * Display success/failure toasts after I get a response from the server after trying to add songs to a playlist
@@ -190,14 +185,14 @@ export default function SongTable() {
         sendRequest("/addSongs", options)
             .then((resp) => {
                 setShuffleSongsOnAdd(false)
-                libraryContext.addSongs(selectedPlaylist.playlistId, resp.success)
+                addSongsToPlaylistDispatch(selectedPlaylist.playlistId, resp.success)
                 displayAddToPlaylistResponseToast(resp)
             })
             .catch((resp) => {
                 log("Error adding songs to playlist");
                 log(resp);
                 if (resp && resp.success) {
-                    libraryContext.addSongs(selectedPlaylist.playlistId, resp.success)
+                    addSongsToPlaylistDispatch(selectedPlaylist.playlistId, resp.success)
                     displayAddToPlaylistResponseToast(resp)
                 } else {
                     toastContext.addToast("Unknown error", ERROR_TOAST)
@@ -226,7 +221,7 @@ export default function SongTable() {
             <Table
                 columns={[{title: "Playlist name", dataIndex: "title"}]}
                 showHeader={false}
-                dataSource={myLibrary.playlists.filter((pl) => pl.playlistId !== "LM"
+                dataSource={canonPlaylistList.filter((pl) => pl.playlistId !== "LM"
                     && pl.playlistId !== pageData.playlistId && pl.playlistId !== "history")}
                 rowKey={"playlistId"}
                 size={"small"}
@@ -247,23 +242,23 @@ export default function SongTable() {
      */
     function removeSelectedRows() {
         let selectedSongs = getSelectedSongs(false, false)
-        pageObject.removeSongsFromPlaylist(pageData.playlistId, selectedSongs)
+        removeSongsDispatch(pageData.playlistId, selectedSongs)
             .then(() => {
                 // de-select all rows
-                pageObject.setSelectedRowIds([])
+                setSelectedRowIdsDispatch([])
             })
             .catch((resp) => {
                 log("Error removing songs:")
                 log(resp)
                 toastContext.addToast("Error removing songs", ERROR_TOAST)
-                songTableContext.fetchData(true).then((fetchedSongs) => {
+                props.fetchData(true).then((fetchedSongs) => {
                     // if the user had selected songs before refreshing: select those songs again
                     if (selectedSongs) {
                         // TODO fix me
                         let newSelectedRowIds = fetchedSongs
                             .filter((song) => selectedSongs.includes(song.id))
                             .map((song) => song.id)
-                        pageObject.setSelectedRowIds(newSelectedRowIds);
+                        setSelectedRowIdsDispatch(newSelectedRowIds);
                     }
                 })
             })
@@ -321,7 +316,7 @@ export default function SongTable() {
             <Button type={"primary"}
                     style={{marginLeft: "10px"}}
                     disabled={pageData.selectedRowIds.length === 0}
-                    onClick={() => pageObject.setSelectedRowIds([])}>
+                    onClick={() => setSelectedRowIdsDispatch([])}>
                 De-select All ({pageData.selectedRowIds.length})
             </Button>
 
@@ -391,7 +386,7 @@ export default function SongTable() {
                                 log(newSelectedRowIds)
                             }
 
-                            pageObject.setSelectedRowIds(newSelectedRowIds)
+                            setSelectedRowIdsDispatch(newSelectedRowIds)
                         },
                     }}
                 />

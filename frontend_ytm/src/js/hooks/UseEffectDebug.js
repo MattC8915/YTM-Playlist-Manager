@@ -1,4 +1,4 @@
-import {log} from "../Utilities";
+import {log} from "../util/logger";
 
 const {useRef} = require("react");
 const {useEffect} = require("react");
@@ -28,7 +28,7 @@ export const useEffectDebugger = (effectHook, dependencies, dependencyNames = []
     }, {});
 
     if (Object.keys(changedDeps).length) {
-        log('[use-effect-debugger] ', changedDeps);
+        log('[use-effect-debugger] ', changedDeps, dependencyNames, dependencies);
     }
 
     useEffect(effectHook, dependencies);

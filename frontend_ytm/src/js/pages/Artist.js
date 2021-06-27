@@ -1,16 +1,18 @@
-import React, {useCallback, useContext, useEffect, useMemo, useState} from "react";
-import {LibraryContext} from "../util/context/LibraryContext";
-import {useHttp} from "../util/hooks/UseHttp";
+import React, {useCallback, useContext, useEffect, useState} from "react";
+import {useHttp} from "../hooks/UseHttp";
 import {ERROR_TOAST} from "../App";
-import {MyToastContext} from "../util/context/MyToastContext";
-import {isAlbumRow, ReleaseType, SongList, SongPageContext, useSongPage} from "../util/context/SongPageContext";
+import {MyToastContext} from "../context/MyToastContext";
 import SongTable from "../components/SongTable";
 import SongPageHeader from "../components/SongPageHeader";
 import Thumbnail from "../components/Thumbnail";
-import {Button, Popover} from "antd";
 import {Link} from "@reach/router";
 import {renderArtistLinkToLocal, renderIndexWithMetadata} from "./Playlist";
-import {log} from "../util/Utilities";
+import {log} from "../util/logger";
+import {useSelector} from "react-redux";
+import {setArtistDispatch} from "../redux/dispatchers/library_dispatcher";
+import {ReleaseType, SONG_PAGE_ARTIST, SongList, SongPageConfig} from "../redux/reducers/SongPageReducer";
+import {setSongListDispatch, setTitleDispatch} from "../redux/dispatchers/songpage_dispatcher";
+import useSongPage, {useSongPageInit} from "../hooks/UseSongPage";
 
 const columns = [
     {
@@ -64,7 +66,6 @@ const columns = [
     },
 ]
 export default function Artist(props) {
-    let libraryContext = useContext(LibraryContext);
     let toastContext = useContext(MyToastContext)
     let sendRequest = useHttp();
     let artistId = props.artistId;
@@ -74,38 +75,38 @@ export default function Artist(props) {
         ()=>{}, columns, [], false)
     let [fetchedAlready, setFetchedAlready] = useState(false);
 
-    let artistData = useMemo(() => {
-        return libraryContext.library.artists[artistId]
-    }, [libraryContext.library.artists, artistId])
+    // eslint-disable-next-line no-undef
+    let artistData = useSelector((state) => {
+        return state.library.artists[artistId]
+    })
 
-    let songPageObject =
-        useSongPage(true, false, false, true,
-            false, null);
-    let songPageData = songPageObject.songPageData;
+    let songPageConfig = new SongPageConfig(true, false, false,
+        true, false, artistId, SONG_PAGE_ARTIST)
+    let songPageData = useSongPageInit(songPageConfig)
 
     const fetchArtistData = useCallback((forceRefresh) => {
         log("Getting artist " + artistId)
         sendRequest(`/artist/${artistId}?ignoreCache=${forceRefresh ? 'true' : 'false'}`)
             .then((resp) => {
                 log(resp);
-                libraryContext.setArtist(resp)
+                setArtistDispatch(resp)
             })
             .catch((resp) => {
                 toastContext.addToast("Error fetching artist data", ERROR_TOAST)
             })
-    }, [artistId, libraryContext, sendRequest, toastContext])
+    }, [artistId, sendRequest, toastContext])
 
     useEffect(() => {
         // set the title and the songs
         if (artistData) {
             let title = artistData.name ? artistData.name : ""
             if (title !== songPageData.title) {
-                songPageObject.setTitle(title);
+                setTitleDispatch(title, songPageData.songPageId);
             }
             singleList.songs = artistData.singles
             albumList.songs = artistData.albums
             // TODO next these lists should just be lists of song/album ids I think
-            songPageObject.setSongData([albumList, singleList])
+            setSongListDispatch([albumList, singleList], songPageData.songPageId)
         }
     }, [artistData, songPageData.title]) // ignore albumList, singleList, songPageData
 
@@ -118,8 +119,9 @@ export default function Artist(props) {
     }, [artistData, artistId, fetchArtistData, fetchedAlready])
 
     return (
-        <SongPageContext.Provider value={{data: songPageObject, fetchData: fetchArtistData}}>
-            <SongPageHeader/>
+        <div>
+            <SongPageHeader songPageId={artistId} songPageType={SONG_PAGE_ARTIST}
+                            fetchData={fetchArtistData}/>
             {artistData && (
                 <div>
                     <div style={{float:"left", paddingRight: "1em"}}>
@@ -130,9 +132,9 @@ export default function Artist(props) {
             )}
 
             <div style={{clear:"both"}}>
-                <SongTable/>
+                <SongTable songPageId={artistId} songPageType={SONG_PAGE_ARTIST}
+                           fetchData={fetchArtistData}/>
             </div>
-
-        </SongPageContext.Provider>
+        </div>
     )
 }
