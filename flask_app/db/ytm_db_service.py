@@ -330,7 +330,7 @@ def persistSongActionFromIds(playlist_id, song_ids: List[str], through_ytm, succ
 def persistSongActionFromSongIds(playlist, song_ids: List[str], through_ytm, success, action_type):
     songs = [s for s in playlist.songs if s.video_id in song_ids]
     if len(song_ids) != len(songs):
-        raise Exception("didn't find all songs")
+        logMessage("ERROR: didn't find all songs") ## TODO next this needs to be fixed
     # songs = [getSongsFromDb(song_id=sid, playlist_id=playlist_id, include_song_playlists=False) for sid in song_ids]
     persistSongAction(playlist, songs, through_ytm, success, action_type)
 

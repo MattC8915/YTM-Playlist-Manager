@@ -85,7 +85,7 @@ export default function SongTable(props) {
                 });
             return canonSong;
         })
-        if (sortFunction) {
+        if (sortFunction && sortFunction !== -1) {
             // noinspection JSCheckFunctionSignatures
             songs = songs.sort(sortFunction);
         }
@@ -416,10 +416,16 @@ export default function SongTable(props) {
             let columnKey = sorter.column.dataIndex
             let ascend = sorter.order === "ascend"
             sortFunc = ascend ?
-                (a, b) => a[columnKey] > b[columnKey] ? 1 : -1 :
-                (a, b) => a[columnKey] > b[columnKey] ? -1 : 1
+                (a, b) => {
+                    return a[columnKey] > b[columnKey] ? 1 : -1
+                } :
+                (a, b) => {
+                    return a[columnKey] > b[columnKey] ? -1 : 1
+                }
         } else {
-            sortFunc = (a, b) => a["index"] > b["index"] ? 1 : -1;
+            sortFunc = (a, b) => {
+                return a["index"] > b["index"] ? 1 : -1;
+            }
         }
         setSortFunction(sortFunc)
         // set the state TODO uncomment this?
@@ -480,7 +486,7 @@ export default function SongTable(props) {
             onChange={tableSortChange}
             pagination={{
                 position: ["topRight", "bottomRight"],
-                defaultPageSize: 100,
+                defaultPageSize: 10000,
                 pageSizeOptions: [100, 1000, 10000],
                 showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`}
             }

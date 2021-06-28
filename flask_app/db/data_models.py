@@ -243,9 +243,10 @@ class Album:
                    release_type=rel_type, thumbnail_id=None)
 
     def to_json(self, index=None):
+        release_type = self.release_type if isinstance(self.release_type, str) else self.release_type.value if self.release_type else ""
         the_json = {"id": self.album_id, "name": self.name, "playlist_id": self.playlist_id,
                     "description": self.description, "duration": self.duration,
-                    "release_type": self.release_type.value if self.release_type else "",
+                    "release_type": release_type,
                     "num_tracks": self.num_tracks, "release_date": self.release_date_timestamp,
                     "thumbnail": self.thumbnail.to_json() if self.thumbnail else {}}
         if index:
